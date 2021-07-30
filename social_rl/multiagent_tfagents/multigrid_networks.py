@@ -118,6 +118,11 @@ def construct_multigrid_networks(observation_spec,
         preprocessing_layers['position'] = tf.keras.models.Sequential(
             [cast_and_scale(), tf.keras.layers.Dense(scalar_fc)])
 
+    if 'fuel' in observation_spec:
+        preprocessing_layers['fuel'] = tf.keras.models.Sequential(
+            [one_hot_layer(scalar_dim),
+             tf.keras.layers.Dense(scalar_fc)])
+
     if random_z:
         preprocessing_layers['random_z'] = tf.keras.models.Sequential(
             [tf.keras.layers.Lambda(lambda x: x)])  # Identity layer

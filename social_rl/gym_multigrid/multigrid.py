@@ -429,7 +429,6 @@ class MultiGridEnv(minigrid.MiniGridEnv):
                 high=255,
                 shape=(self.n_agents,) + obs_image_shape,
                 dtype='uint8')
-        # print("INITNITNTINTNT", self.minigrid_mode)
 
         # Observations are dictionaries containing an encoding of the grid and the
         # agent's direction

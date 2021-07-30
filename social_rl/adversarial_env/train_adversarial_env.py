@@ -32,7 +32,7 @@ from social_rl import gym_multigrid  # Import needed to trigger env registration
 import os
 import silence_tensorflow.auto
 import tensorflow as tf  # pylint: disable=g-explicit-tensorflow-version-import
-
+import sys
 import math
 import random
 import time
@@ -101,6 +101,8 @@ flags.DEFINE_boolean('combined_population', False,
                      'score for a given round.')
 flags.DEFINE_float('block_budget_weight', 0.,
                    'Coefficient used to impose block budget on the adversary.')
+flags.DEFINE_string('redirect', "False",
+                    'redirect_prints_to_file')
 FLAGS = flags.FLAGS
 
 # Loss value that is considered too high and training will be terminated.
@@ -149,7 +151,7 @@ def train_eval(
     # Params for collect
     num_train_steps=500000,
     collect_episodes_per_iteration=30,
-    num_parallel_envs=5,
+    num_parallel_envs=1,
     replay_buffer_capacity=1001,  # Per-environment
     # Params for train
     num_epochs=25,
@@ -436,6 +438,7 @@ def train_eval(
             if debug:
                 logging.info('Training at step %d', global_step_val)
             start_time = time.time()
+
             for name, agent_list in agents.items():
                 if random_episodes and name == 'adversary_env':
                     # Don't train the adversary on randomly generated episodes
@@ -539,7 +542,386 @@ def train_eval(
             adversarial_eval.log_metrics(agents, env_eval_metrics)
 
 
+def train_eval_search_based(
+    root_dir,
+    env_name='MultiGrid-Adversarial-v0',
+    random_seed=None,
+    # PAIRED parameters
+    agents_learn_with_regret=True,
+    non_negative_regret=True,
+    unconstrained_adversary=False,
+    domain_randomization=False,
+    percent_random_episodes=0.,
+    protagonist_episode_length=None,
+    flexible_protagonist=False,
+    adversary_population_size=1,
+    protagonist_population_size=1,
+    antagonist_population_size=1,
+    combined_population=False,
+    block_budget_weight=0,
+    # Agent architecture params
+    actor_fc_layers=(32, 32),
+    value_fc_layers=(32, 32),
+    lstm_size=(128,),
+    conv_filters=8,
+    conv_kernel=3,
+    direction_fc=5,
+    entropy_regularization=0.,
+    # Adversary architecture params
+    adversary_env_rnn=True,
+    adv_actor_fc_layers=(32, 32),
+    adv_value_fc_layers=(32, 32),
+    adv_lstm_size=(128,),
+    adv_conv_filters=16,
+    adv_conv_kernel=3,
+    adv_timestep_fc=10,
+    adv_entropy_regularization=0.,
+    # Params for collect
+    num_train_steps=500000,
+    collect_episodes_per_iteration=30,
+    num_parallel_envs=1,
+    replay_buffer_capacity=1001,  # Per-environment
+    # Params for train
+    num_epochs=25,
+    learning_rate=1e-4,
+    # Params for eval
+    num_eval_episodes=5,
+    eval_interval=10,
+    # Params for summaries and logging
+    train_checkpoint_interval=100,
+    policy_checkpoint_interval=100,
+    log_interval=5,
+    summary_interval=5,
+    summaries_flush_secs=1,
+    use_tf_functions=True,
+    debug_summaries=True,
+    summarize_grads_and_vars=True,
+    eval_metrics_callback=None,
+        debug=True):
+    """Adversarial environment train and eval."""
+    tf.compat.v1.enable_v2_behavior()
+
+    if combined_population:
+        # The number of train steps per environment episodes differs based on the
+        # number of agents trained per episode. Adjust value when training a
+        # population of agents per episode.
+        # The number of agents must change from 3 (for protagonist, antagonist,
+        # adversary) to protagonist population size + adversary
+        num_train_steps = num_train_steps / 3 * (protagonist_population_size + 1)
+
+    if root_dir is None:
+        raise AttributeError('train_eval requires a root_dir.')
+
+    gym_env = adversarial_env.load(env_name)
+
+    # Set up logging
+    root_dir = os.path.expanduser(root_dir)
+    train_dir = os.path.join(root_dir, 'train')
+    eval_dir = os.path.join(root_dir, 'eval')
+
+    train_summary_writer = tf.compat.v2.summary.create_file_writer(
+        train_dir, flush_millis=summaries_flush_secs * 1000)
+    train_summary_writer.set_as_default()
+
+    eval_summary_writer = tf.compat.v2.summary.create_file_writer(
+        eval_dir, flush_millis=summaries_flush_secs * 1000)
+
+    # Initialize global step and random seed
+    global_step = tf.compat.v1.train.get_or_create_global_step()
+    with tf.compat.v2.summary.record_if(
+            lambda: tf.math.equal(global_step % summary_interval, 0)):
+        if random_seed is not None:
+            tf.compat.v1.set_random_seed(random_seed)
+
+        # Create environments
+        logging.info('Creating %d environments...', num_parallel_envs)
+        eval_tf_env = adversarial_env.AdversarialTFPyEnvironment(
+            adversarial_env_parallel.AdversarialParallelPyEnvironment(
+                [lambda: adversarial_env.load(env_name)] * num_eval_episodes))
+        tf_env = adversarial_env.AdversarialTFPyEnvironment(
+            adversarial_env_parallel.AdversarialParallelPyEnvironment(
+                [lambda: adversarial_env.load(env_name)] * num_parallel_envs))
+
+        logging.info('Preparing to train...')
+        environment_steps_metric = tf_metrics.EnvironmentSteps()
+        step_metrics = [
+            tf_metrics.NumberOfEpisodes(),
+            environment_steps_metric,
+        ]
+
+        # Logging for special environment metrics
+        env_metrics_names = [
+            'DistanceToGoal',
+            'NumBlocks',
+            'DeliberatePlacement',
+            'NumEnvEpisodes',
+            'GoalX',
+            'GoalY',
+            'IsPassable',
+            'ShortestPathLength',
+            'ShortestPassablePathLength',
+            'SolvedPathLength',
+            'TrainEpisodesCollected',
+        ]
+        env_train_metrics = []
+        env_eval_metrics = []
+        for mname in env_metrics_names:
+            env_train_metrics.append(adversarial_eval.AdversarialEnvironmentScalar(
+                batch_size=num_parallel_envs, name=mname))
+            env_eval_metrics.append(adversarial_eval.AdversarialEnvironmentScalar(
+                batch_size=num_eval_episodes, name=mname))
+
+        # Create (populations of) both agents that learn to navigate the environment
+        agents = {}
+        for agent_name in ['agent', 'adversary_agent']:
+            if (agent_name == 'adversary_agent' and
+                (domain_randomization or unconstrained_adversary or
+                 combined_population)):
+                # Antagonist agent not needed for baselines
+                continue
+
+            max_steps = gym_env.max_steps
+            if protagonist_episode_length is not None and agent_name == 'agent':
+                max_steps = protagonist_episode_length
+
+            if agent_name == 'agent':
+                population_size = protagonist_population_size
+            else:
+                population_size = antagonist_population_size
+
+            agents[agent_name] = []
+            for i in range(population_size):
+                logging.info('Creating agent... %s %d', agent_name, i)
+                agents[agent_name].append(agent_train_package.AgentTrainPackage(
+                    tf_env,
+                    global_step,
+                    root_dir,
+                    step_metrics,
+                    name=agent_name,
+                    use_tf_functions=use_tf_functions,
+                    max_steps=max_steps,
+                    replace_reward=(not unconstrained_adversary
+                                    and agents_learn_with_regret),
+                    id_num=i,
+
+                    # Architecture hparams
+                    learning_rate=learning_rate,
+                    actor_fc_layers=actor_fc_layers,
+                    value_fc_layers=value_fc_layers,
+                    lstm_size=lstm_size,
+                    conv_filters=conv_filters,
+                    conv_kernel=conv_kernel,
+                    scalar_fc=direction_fc,
+                    entropy_regularization=entropy_regularization,
+
+                    # Training & logging settings
+                    num_epochs=num_epochs,
+                    num_eval_episodes=num_eval_episodes,
+                    num_parallel_envs=num_parallel_envs,
+                    replay_buffer_capacity=replay_buffer_capacity,
+                    debug_summaries=debug_summaries,
+                    summarize_grads_and_vars=summarize_grads_and_vars))
+
+        logging.info('Creating adversarial drivers')
+        adversary_agent = agents['adversary_agent']
+
+        adversary_env = None
+        collect_driver = adversarial_driver.AdversarialDriver(
+            tf_env,
+            agents['agent'],
+            adversary_agent,
+            adversary_env,
+            env_metrics=env_train_metrics,
+            collect=True,
+            disable_tf_function=True,  # TODO(natashajaques): enable tf functions
+            debug=debug,
+            combined_population=combined_population,
+            flexible_protagonist=flexible_protagonist)
+        eval_driver = adversarial_driver.AdversarialDriver(
+            eval_tf_env,
+            agents['agent'],
+            adversary_agent,
+            adversary_env,
+            env_metrics=env_eval_metrics,
+            collect=False,
+            disable_tf_function=True,  # TODO(natashajaques): enable tf functions
+            debug=False,
+            combined_population=combined_population,
+            flexible_protagonist=flexible_protagonist)
+
+        collect_time = 0
+        train_time = 0
+        timed_at_step = global_step.numpy()
+
+        # Save operative config as late as possible to include used configurables.
+        if global_step.numpy() == 0:
+            config_filename = os.path.join(
+                train_dir, 'operative_config-{}.gin'.format(global_step.numpy()))
+            with tf.io.gfile.GFile(config_filename, 'wb') as f:
+                f.write(gin.operative_config_str())
+
+        total_episodes = 0
+        logging.info('Commencing train loop!')
+        # Note that if there are N agents, the global step will increase at N times
+        # the rate for the same number of train episodes (because it increases for
+        # each agent trained. Therefore it is important to divide the train steps by
+        # N when plotting).
+        while global_step.numpy() <= num_train_steps:
+            global_step_val = global_step.numpy()
+
+            # Evaluation
+            if global_step_val % eval_interval == 0:
+                if debug:
+                    logging.info('Performing evaluation at step %d', global_step_val)
+                results = adversarial_eval.eager_compute(
+                    eval_driver,
+                    agents,
+                    env_metrics=env_eval_metrics,
+                    train_step=global_step,
+                    summary_writer=eval_summary_writer,
+                    summary_prefix='Metrics'
+                )
+                if eval_metrics_callback is not None:
+                    eval_metrics_callback(results, global_step.numpy())
+                adversarial_eval.log_metrics(agents, env_eval_metrics)
+                if debug:
+                    logging.info('END EVAL ===========================')
+                # Used to interleave randomized episodes with adversarial training
+            random_episodes = False
+            if percent_random_episodes > 0:
+                chance_random = random.random()
+                if chance_random < percent_random_episodes:
+                    random_episodes = True
+                    if debug:
+                        logging.info('RANDOM EPISODE')
+
+            # Collect data
+            if debug:
+                logging.info('Collecting at step %d', global_step_val)
+            start_time = time.time()
+            train_idxs = collect_driver.run(random_episodes=random_episodes, search_based=True)
+            collect_time += time.time() - start_time
+            if debug:
+                logging.info('Trained agents: %s', ', '.join(train_idxs))
+
+            # Log total episodes collected
+            total_episodes += collect_episodes_per_iteration
+            eps_metric = [tf.convert_to_tensor(total_episodes, dtype=tf.float32)]
+            env_train_metrics[-1](eps_metric)
+            env_eval_metrics[-1](eps_metric)
+            if debug:
+                logging.info('Have collected a total of %d episodes', total_episodes)
+
+            # Train
+            if debug:
+                logging.info('Training at step %d', global_step_val)
+            start_time = time.time()
+
+            for name, agent_list in agents.items():
+                if name == 'adversary_env':
+                    # Don't train the adversary on randomly generated episodes
+                    continue
+                # Train the agents selected by the driver this training run
+                for agent_idx in train_idxs[name]:
+                    agent = agent_list[agent_idx]
+                    if debug:
+                        logging.info('\tTraining %s %d', name, agent_idx)
+                    agent.total_loss, agent.extra_loss = agent.train_step()
+                    agent.replay_buffer.clear()
+
+                    # Check for exploding losses.
+                    if (math.isnan(agent.total_loss) or math.isinf(agent.total_loss) or
+                            agent.total_loss > MAX_LOSS):
+                        agent.loss_divergence_counter += 1
+                        if agent.loss_divergence_counter > TERMINATE_AFTER_DIVERGED_STEPS:
+                            logging.info('Loss diverged for too many timesteps, breaking...')
+                            break
+                    else:
+                        agent.loss_divergence_counter = 0
+
+                # Log train metrics to tensorboard
+                for train_metric in agent.train_metrics:
+                    train_metric.tf_summaries(
+                        train_step=global_step, step_metrics=step_metrics)
+                if agent.is_environment:
+                    agent.env_train_metric.tf_summaries(
+                        train_step=global_step, step_metrics=step_metrics)
+
+            # Global environment stats logging
+            for metric in env_train_metrics:
+                metric.tf_summaries(train_step=global_step, step_metrics=step_metrics)
+            if debug:
+                logging.info('Train metrics for step %d', global_step_val)
+                adversarial_eval.log_metrics(agents, env_train_metrics)
+
+            train_time += time.time() - start_time
+
+            # Print output logging statements
+            if global_step_val % log_interval == 0:
+                for name, agent_list in agents.items():
+                    for i, agent in enumerate(agent_list):
+                        print('Loss for', name, i, '=', agent.total_loss)
+                steps_per_sec = (
+                    (global_step_val - timed_at_step) / (collect_time + train_time))
+                logging.info('%.3f steps/sec', steps_per_sec)
+                logging.info('collect_time = %.3f, train_time = %.3f', collect_time,
+                             train_time)
+                with tf.compat.v2.summary.record_if(True):
+                    tf.compat.v2.summary.scalar(
+                        name='global_steps_per_sec', data=steps_per_sec, step=global_step)
+
+                # Save checkpoints for all agent types and population members
+                if global_step_val % train_checkpoint_interval == 0:
+                    for name, agent_list in agents.items():
+                        for i, agent in enumerate(agent_list):
+                            if debug:
+                                logging.info('Saving checkpoint for agent %s %d', name, i)
+                            agent.train_checkpointer.save(global_step=global_step_val)
+                if global_step_val % policy_checkpoint_interval == 0:
+                    for name, agent_list in agents.items():
+                        for i, agent in enumerate(agent_list):
+                            agent.policy_checkpointer.save(global_step=global_step_val)
+                            saved_model_path = os.path.join(
+                                agent.saved_model_dir,
+                                'policy_' + ('%d' % global_step_val).zfill(9))
+                            agent.saved_model.save(saved_model_path)
+
+                timed_at_step = global_step_val
+                collect_time = 0
+                train_time = 0
+
+        if global_step_val:
+            # Save one final checkpoint for all agent types and population members
+            for name, agent_list in agents.items():
+                for i, agent in enumerate(agent_list):
+                    if debug:
+                        logging.info('Saving checkpoint for agent %s %d', name, i)
+                    agent.train_checkpointer.save(global_step=global_step_val)
+            for name, agent_list in agents.items():
+                for i, agent in enumerate(agent_list):
+                    agent.policy_checkpointer.save(global_step=global_step_val)
+                    saved_model_path = os.path.join(
+                        agent.saved_model_dir,
+                        'policy_' + ('%d' % global_step_val).zfill(9))
+                    agent.saved_model.save(saved_model_path)
+
+            # One final eval before exiting.
+            results = adversarial_eval.eager_compute(
+                eval_driver,
+                agents,
+                env_metrics=env_eval_metrics,
+                train_step=global_step,
+                summary_writer=eval_summary_writer,
+                summary_prefix='Metrics'
+            )
+            if eval_metrics_callback is not None:
+                eval_metrics_callback(results, global_step.numpy())
+            adversarial_eval.log_metrics(agents, env_eval_metrics)
+
+
 def main(_):
+    os.environ["redirect"] = FLAGS.redirect
+
     logging.set_verbosity(logging.INFO)
     train_eval(
         FLAGS.root_dir,

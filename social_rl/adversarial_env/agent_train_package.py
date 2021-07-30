@@ -246,6 +246,10 @@ class AgentTrainPackage(object):
     def train_step(self):
         """Collects trajectories and trains the agent on them."""
         trajectories = self.get_trajectories()
+        # import pdb
+        import numpy as np
+        # if np.mean(trajectories.reward) > 0:
+        # pdb.set_trace()
         with tf.name_scope(self.name):
             return self.tf_agent.train(experience=trajectories)
 

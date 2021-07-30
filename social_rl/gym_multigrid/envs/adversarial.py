@@ -212,6 +212,20 @@ class AdversarialEnv(multigrid.MultiGridEnv):
 
         return obs
 
+    def sample_random_state(self, seed=None):
+        """get a random state in the environment"""
+        # grid_cpy = np.copy(self.grid)
+
+        a_pos = self.agent_pos[0]
+        self.grid.set(a_pos[0], a_pos[1], None)
+
+        pos = self.place_obj(None, None, None, max_tries=100)
+        self.place_agent_at_pos(0, pos, agent_obj=None,
+                                rand_dir=True)
+        obs = self.gen_obs()
+        # self.grid = grid_cpy
+        return obs
+
     def remove_wall(self, x, y):
         if (x - 1, y - 1) in self.wall_locs:
             self.wall_locs.remove((x - 1, y - 1))
@@ -292,43 +306,44 @@ class AdversarialEnv(multigrid.MultiGridEnv):
         elif should_choose_agent:
             self.remove_wall(x, y)  # Remove any walls that might be in this loc
 
-            if num_inited < 30:
-                l1 = 2
-                g_x, g_y = self.goal_pos
-                new_cord_x, new_cord_y = max(g_x - l1, 0), max(g_y - l1, 0)
-                self.agent_start_pos = self.place_one_agent(0, top=(new_cord_x, new_cord_y), size=(l1 * 2, l1 * 2), rand_dir=False)
-                self.deliberate_agent_placement = 1
+            # if num_inited < 30:
+            #     l1 = 2
+            #     g_x, g_y = self.goal_pos
+            #     new_cord_x, new_cord_y = max(g_x - l1, 0), max(g_y - l1, 0)
+            #     self.agent_start_pos = self.place_one_agent(0, top=(new_cord_x, new_cord_y), size=(l1 * 2, l1 * 2), rand_dir=False)
+            #     self.deliberate_agent_placement = 1
 
-            elif num_inited < 60:
-                l1 = 3
-                g_x, g_y = self.goal_pos
-                new_cord_x, new_cord_y = max(g_x - l1, 0), max(g_y - l1, 0)
-                self.agent_start_pos = self.place_one_agent(0, top=(new_cord_x, new_cord_y), size=(l1 * 2, l1 * 2), rand_dir=False)
-                self.deliberate_agent_placement = 1
+            # elif num_inited < 60:
+            #     l1 = 3
+            #     g_x, g_y = self.goal_pos
+            #     new_cord_x, new_cord_y = max(g_x - l1, 0), max(g_y - l1, 0)
+            #     self.agent_start_pos = self.place_one_agent(0, top=(new_cord_x, new_cord_y), size=(l1 * 2, l1 * 2), rand_dir=False)
+            #     self.deliberate_agent_placement = 1
 
-            elif num_inited < 90:
-                l1 = 4
-                g_x, g_y = self.goal_pos
-                new_cord_x, new_cord_y = max(g_x - l1, 0), max(g_y - l1, 0)
-                self.agent_start_pos = self.place_one_agent(0, top=(new_cord_x, new_cord_y), size=(l1 * 2, l1 * 2), rand_dir=False)
-                self.deliberate_agent_placement = 1
+            # elif num_inited < 90:
+            #     l1 = 4
+            #     g_x, g_y = self.goal_pos
+            #     new_cord_x, new_cord_y = max(g_x - l1, 0), max(g_y - l1, 0)
+            #     self.agent_start_pos = self.place_one_agent(0, top=(new_cord_x, new_cord_y), size=(l1 * 2, l1 * 2), rand_dir=False)
+            #     self.deliberate_agent_placement = 1
 
-            elif num_inited < 120:
-                l1 = 5
-                g_x, g_y = self.goal_pos
-                new_cord_x, new_cord_y = max(g_x - l1, 0), max(g_y - l1, 0)
-                self.agent_start_pos = self.place_one_agent(0, top=(new_cord_x, new_cord_y), size=(l1 * 2, l1 * 2), rand_dir=False)
-                self.deliberate_agent_placement = 1
+            # elif num_inited < 120:
+            #     l1 = 5
+            #     g_x, g_y = self.goal_pos
+            #     new_cord_x, new_cord_y = max(g_x - l1, 0), max(g_y - l1, 0)
+            #     self.agent_start_pos = self.place_one_agent(0, top=(new_cord_x, new_cord_y), size=(l1 * 2, l1 * 2), rand_dir=False)
+            #     self.deliberate_agent_placement = 1
 
-            elif num_inited < 150:
-                l1 = 6
-                g_x, g_y = self.goal_pos
-                new_cord_x, new_cord_y = max(g_x - l1, 0), max(g_y - l1, 0)
-                self.agent_start_pos = self.place_one_agent(0, top=(new_cord_x, new_cord_y), size=(l1 * 2, l1 * 2), rand_dir=False)
-                self.deliberate_agent_placement = 1
+            # elif num_inited < 150:
+            #     l1 = 6
+            #     g_x, g_y = self.goal_pos
+            #     new_cord_x, new_cord_y = max(g_x - l1, 0), max(g_y - l1, 0)
+            #     self.agent_start_pos = self.place_one_agent(0, top=(new_cord_x, new_cord_y), size=(l1 * 2, l1 * 2), rand_dir=False)
+            #     self.deliberate_agent_placement = 1
+            # self.agent_start_pos = self.place_one_agent(0, top=(new_cord_x, new_cord_y), size=(l1 * 2, l1 * 2), rand_dir=False)
 
             # Goal has already been placed here
-            elif self.grid.get(x, y) is not None:
+            if self.grid.get(x, y) is not None:
                 # Place agent randomly
                 self.agent_start_pos = self.place_one_agent(0, rand_dir=False)
                 self.deliberate_agent_placement = 0
@@ -453,10 +468,6 @@ class ReparameterizedAdversarialEnv(AdversarialEnv):
         x = int(step % (self.width - 2)) + 1
         y = int(step / (self.width - 2)) + 1
         return x, y
-
-    # def sample_random_state(self, seed=None):
-    #     """get a random state in the environment"""
-    #     return state
 
     def step_adversary(self, action):
         """The adversary gets a step for each available square in the grid.

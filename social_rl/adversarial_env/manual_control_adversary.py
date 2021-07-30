@@ -94,6 +94,7 @@ def get_user_input_environment(env, reparam=False):
     Returns:
       Integer action.
     """
+    num_inputs = env.adversary_action_space.shape[0]
     max_action = env.adversary_action_dim - 1
     min_action = 0
 
@@ -124,14 +125,27 @@ def get_user_input_environment(env, reparam=False):
         if user_cmd == 'q':
             return False
 
-        if (not user_cmd.isdigit() or int(user_cmd) > max_action or
-                int(user_cmd) < min_action):
-            print('Invalid action. All actions must be an integer between',
-                  min_action, 'and', max_action)
-        else:
-            break
-
-    return user_cmd
+        res = user_cmd.split(",")
+        if len(res) != num_inputs:
+            print("invalid input space, please input with {} inputs with , as seprator".format(num_inputs))
+            continue
+        action = []
+        legal = True
+        for uinput in res:
+            if (not uinput.isdigit() or float(uinput) > max_action or
+                    float(uinput) < min_action):
+                print('Invalid action. All actions must be an integer between',
+                      min_action, 'and', max_action)
+                legal = False
+                break
+            else:
+                action.append(np.array(uinput).astype(env.adversary_action_space.dtype))
+        if legal == False:
+            continue
+        if len(action) == 1:
+            print("WHAT", action)
+            action = action[0]
+        return action
 
 
 def main(args):
@@ -159,7 +173,7 @@ def main(args):
             if not action:
                 break
 
-            obs, _, done, _ = env.step_adversary(int(action))
+            obs, _, done, _ = env.step_adversary(action)
             plt.imshow(env.render('rgb_array'))
             print(env)
             # print(env)

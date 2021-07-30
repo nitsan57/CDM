@@ -164,6 +164,12 @@ class AdversarialParallelPyEnvironment(py_environment.PyEnvironment):
             time_steps = [promise() for promise in time_steps]
         return self._stack_time_steps(time_steps)
 
+    def sample_random_state(self):
+        time_steps = [env.sample_random_state(self._blocking) for env in self._envs]
+        if not self._blocking:
+            time_steps = [promise() for promise in time_steps]
+        return self._stack_time_steps(time_steps)
+
     def reset_agent(self):
         """Reset all environments and combine the resulting observation.
 
@@ -465,6 +471,13 @@ class AdversarialProcessPyEnvironment(object):
 
     def step_adversary(self, action, blocking=True):
         promise = self.call('step_adversary', action)
+        if blocking:
+            return promise()
+        else:
+            return promise
+
+    def sample_random_state(self, blocking=True):
+        promise = self.call('sample_random_state')
         if blocking:
             return promise()
         else:

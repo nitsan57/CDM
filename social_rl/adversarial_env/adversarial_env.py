@@ -49,7 +49,7 @@ from tf_agents.utils import nest_utils
 
 @gin.configurable
 def load(environment_name,
-         discount=1.0,
+         discount=0.99,
          max_episode_steps=None,
          gym_env_wrappers=(),
          env_wrappers=(),
@@ -118,7 +118,7 @@ class AdversarialGymWrapper(gym_wrapper.GymWrapper):
 
     def __init__(self,
                  gym_env,
-                 discount=1.0,
+                 discount=0.99,
                  spec_dtype_map=None,
                  match_obs_space_dtype=True,
                  auto_reset=False,
@@ -158,15 +158,26 @@ class AdversarialGymWrapper(gym_wrapper.GymWrapper):
             observation, reward_spec=self.reward_spec())
         return self._current_time_step
 
+    def sample_random_state(self):
+        observation = self._gym_env.sample_random_state()
+        self._info = None
+        self._done = False
+        if self._match_obs_space_dtype:
+            observation = self._to_obs_space_dtype(observation)
+        time_step = ts_lib.restart(
+            observation, reward_spec=self.reward_spec())
+        self._current_time_step = time_step
+        return time_step
+
     def reset_agent(self):
         observation = self._gym_env.reset_agent()
         self._info = None
         self._done = False
-
         if self._match_obs_space_dtype:
             observation = self._to_obs_space_dtype(observation)
         self._current_time_step = ts_lib.restart(
             observation, reward_spec=self.reward_spec())
+
         return self._current_time_step
 
     def _adversary_to_obs_space_dtype(self, observation):
@@ -188,7 +199,6 @@ class AdversarialGymWrapper(gym_wrapper.GymWrapper):
         action = action.item() if self._action_is_discrete else action
 
         observation, reward, self._done, self._info = self._gym_env.step(action)
-
         if self._match_obs_space_dtype:
             observation = self._to_obs_space_dtype(observation)
 
@@ -298,6 +308,16 @@ class AdversarialBatchedPyEnvironment(
                 lambda env: tf.cast(env.shortest_path_length, tf.float32),
                 self._envs)
 
+    def sample_random_state(self):
+        if self._num_envs == 1:
+            x = self._envs[0].get_custom_obs(gym_obs)
+            y = nest_utils.batch_nested_array(x)
+            return y
+        else:
+            time_steps = self._execute(lambda env: env.get_custom_obs(gym_obs), self._envs)
+
+            return nest_utils.stack_nested_arrays(time_steps)
+
     def reset_agent(self):
         if self._num_envs == 1:
             return nest_utils.batch_nested_array(self._envs[0].reset_agent())
@@ -362,7 +382,6 @@ class AdversarialTFPyEnvironment(tf_py_environment.TFPyEnvironment):
         # Prevent parent class from using its own batched environment
         super(AdversarialTFPyEnvironment, self).__init__(
             environment, check_dims=check_dims, isolation=isolation)
-        # print("************", environment)
         self.data_PyEnvironment = environment
         if not environment.batched:
             self._env = AdversarialBatchedPyEnvironment(
@@ -381,7 +400,24 @@ class AdversarialTFPyEnvironment(tf_py_environment.TFPyEnvironment):
             s.dtype for s in tf.nest.flatten(self.adversary_time_step_spec)
         ]
 
-    # Make sure this is called without conversion from tf.function.
+    @tf.autograph.experimental.do_not_convert()
+    def sample_random_state(self):
+        def _sample_random_state_py():
+            with tf_py_environment._check_not_called_concurrently(self._lock):  # pylint:disable=protected-access
+                self._agent_time_step = self._env.sample_random_state()
+
+        def _isolated_sample_random_state_py():
+            return self._execute(_sample_random_state_py)
+
+        with tf.name_scope('sample_random_state'):
+            reset_op = tf.numpy_function(
+                _isolated_sample_random_state_py,
+                [],  # No inputs.
+                [],
+                name='sample_random_state_py')
+            with tf.control_dependencies([reset_op]):
+                return self._current_agent_time_step()
+
     @tf.autograph.experimental.do_not_convert()
     def reset_agent(self):
         def _reset_py():
@@ -543,7 +579,6 @@ class AdversarialTFPyEnvironment(tf_py_environment.TFPyEnvironment):
                 name='step_py_func')
             step_type, reward, discount = outputs[0:3]
 
-            # print("ADV VECTOR REWARD", reward.numpy())
             # print("ADV VECTOR REWARD", reward.numpy())
 
             flat_observations = outputs[3:]
