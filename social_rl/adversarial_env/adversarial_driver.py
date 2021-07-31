@@ -148,7 +148,7 @@ class AdversarialDriver(object):
 
             agent_idx = np.random.choice(len(self.agent))
             agent = self.agent[agent_idx]
-            custom_printer(f"AGNET_RUNNING ON SAMPLED STATE:{agent.name}")
+            # custom_printer(f"AGNET_RUNNING ON SAMPLED STATE:{agent.name}")
             policy = agent.collect_policy
 
             policy_state = policy.get_initial_state(self.env.batch_size)
@@ -255,7 +255,7 @@ class AdversarialDriver(object):
 
             agent_idx = np.random.choice(len(self.agent))
             agent = self.agent[agent_idx]
-            custom_printer(f"AGNET_RUNNING ON SAMPLED STATE:{agent.name}")
+            # custom_printer(f"AGNET_RUNNING ON SAMPLED STATE:{agent.name}")
             policy = agent.collect_policy
 
             policy_state = policy.get_initial_state(self.env.batch_size)
@@ -591,7 +591,7 @@ class AdversarialDriver(object):
         if agent_idx is None:
             agent_idx = np.random.choice(len(agent_list))
         agent = agent_list[agent_idx]
-        custom_printer(f"AGNET_RUNNING:{agent.name}", )
+        # custom_printer(f"AGNET_RUNNING:{agent.name}", )
 
         if self.collect:
             policy = agent.collect_policy
