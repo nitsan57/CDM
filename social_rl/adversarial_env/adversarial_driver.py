@@ -129,7 +129,7 @@ class AdversarialDriver(object):
         ###NEW LOGIC###
         from social_rl.adversarial_env.adversarial_env import AdversarialTFPyEnvironment
         orig_data = self.env.data_PyEnvironment
-        custom_printer("ENVIRONEMNT NUMBER: {self.total_episodes_collected}")
+        custom_printer(f"ENVIRONEMNT NUMBER: {self.total_episodes_collected}")
         # create some env copies
         train_idxs = {}
         # import pdb
@@ -223,7 +223,7 @@ class AdversarialDriver(object):
             logging.info('Environment score: %f',
                          tf.reduce_mean(env_reward).numpy())
             if self.adversary_agent:
-                custom_printer(f'Agent reward: avg = {tf.reduce_mean(adv_agent_r_avg).numpy()}, max = {tf.reduce_mean(adv_agent_r_max).numpy()}')
+                custom_printer(f'Adversary Agent reward: avg = {tf.reduce_mean(adv_agent_r_avg).numpy()}, max = {tf.reduce_mean(adv_agent_r_max).numpy()}')
                 logging.info('Adversary agent reward: avg = %f, max = %f',
                              tf.reduce_mean(adv_agent_r_avg).numpy(),
                              tf.reduce_mean(adv_agent_r_max).numpy())
@@ -239,7 +239,7 @@ class AdversarialDriver(object):
         orig_data = self.env.data_PyEnvironment
         # create some env copies
         train_idxs = {}
-        custom_printer("ENVIRONEMNT NUMBER: {self.total_episodes_collected}")
+        custom_printer(f"ENVIRONEMNT NUMBER: {self.total_episodes_collected}")
 
         env_curriculum = EnvCurriculum()
         if self.collect:
@@ -330,7 +330,7 @@ class AdversarialDriver(object):
             logging.info('Environment score: %f',
                          tf.reduce_mean(env_reward).numpy())
             if self.adversary_agent:
-                custom_printer(f'Agent reward: avg = {tf.reduce_mean(adv_agent_r_avg).numpy()}, max = {tf.reduce_mean(adv_agent_r_max).numpy()}')
+                custom_printer(f'Adversary Agent reward: avg = {tf.reduce_mean(adv_agent_r_avg).numpy()}, max = {tf.reduce_mean(adv_agent_r_max).numpy()}')
                 logging.info('Adversary agent reward: avg = %f, max = %f',
                              tf.reduce_mean(adv_agent_r_avg).numpy(),
                              tf.reduce_mean(adv_agent_r_max).numpy())
@@ -343,7 +343,7 @@ class AdversarialDriver(object):
         _, _, env_idx = self.run_agent(
             self.env, self.adversary_env, self.env.reset, self.env.step_adversary)
         train_idxs = {'adversary_env': [env_idx]}
-        custom_printer("ENVIRONEMNT NUMBER: {self.total_episodes_collected}")
+        custom_printer(f"ENVIRONEMNT NUMBER: {self.total_episodes_collected}")
         ########################################################
         # DEBUG ENV
         # x = self.env._envs[-1].render()
@@ -414,7 +414,7 @@ class AdversarialDriver(object):
             logging.info('Environment score: %f',
                          tf.reduce_mean(env_reward).numpy())
             if self.adversary_agent:
-                custom_printer(f'Agent reward: avg = {tf.reduce_mean(adv_agent_r_avg).numpy()}, max = {tf.reduce_mean(adv_agent_r_max).numpy()}')
+                custom_printer(f'Adversary Agent reward: avg = {tf.reduce_mean(adv_agent_r_avg).numpy()}, max = {tf.reduce_mean(adv_agent_r_max).numpy()}')
                 logging.info('Adversary agent reward: avg = %f, max = %f',
                              tf.reduce_mean(adv_agent_r_avg).numpy(),
                              tf.reduce_mean(adv_agent_r_max).numpy())
