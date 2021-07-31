@@ -44,8 +44,8 @@ class RGBCOLORS_MINUS_50:
 
 def create_empty_map(size):
     domain_map = []
-    abs_size_x = size * 2 + 1
-    abs_size_y = size + 2
+    abs_size_x = size
+    abs_size_y = size
     for i in range(abs_size_y):
         map_row = []
         for j in range(abs_size_x):
@@ -358,6 +358,7 @@ class FrozenLakeEnv(discrete.DiscreteEnv):
         transitions = self.P[self.s][a]
         i = discrete.categorical_sample([t[0] for t in transitions], self.np_random)  # only 0 index is chosen
         p, s, r, done = transitions[i]
+        print("REWARD", r)
         self.s = s
         self.lastaction = a
 
