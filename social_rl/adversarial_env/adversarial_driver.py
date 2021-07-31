@@ -111,7 +111,7 @@ class AdversarialDriver(object):
             if self.combined_population:
                 agent_r_max, train_idxs = self.combined_population_adversarial_episode()
             else:
-                agent_r_max, train_idxs = self.adversarial_episode_heuristic()  # self.adversarial_episode()
+                agent_r_max, train_idxs = self.adversarial_episode() #self.adversarial_episode_heuristic() 
         else:
             # Only one agent plays a randomly generated environment.
             agent_r_max, train_idxs = self.domain_randomization_episode()
@@ -140,9 +140,8 @@ class AdversarialDriver(object):
             filled_base_env_list = []
             trajectories_list = []
             for i in range(len(orig_env_list)):
-                _, _, env_idx, trajectories = self
-
-                orig_env_list[i], self.adversary_env, self.env.reset, self.env.step_adversary, gen_env_mode = True)
+                _, _, env_idx, trajectories=self.run_agent(
+                    orig_env_list[i], self.adversary_env, self.env.reset, self.env.step_adversary, gen_env_mode=True)
                 trajectories_list.append(trajectories)
                 filled_base_env_list.append(orig_env_list[i])
 
@@ -152,7 +151,7 @@ class AdversarialDriver(object):
             policy=agent.collect_policy
 
             policy_state=policy.get_initial_state(self.env.batch_size)
-            idx=choose_best_env_idx(filled_base_env_list, policy, policy_state)
+            idx=env_curriculum.choose_best_env_idx(filled_base_env_list, policy, policy_state)
             self.env=orig_env_list[idx]
             # for trajectories in trajectories_list:
             for traj in trajectories_list[idx]:
@@ -238,6 +237,7 @@ class AdversarialDriver(object):
         orig_data=self.env.data_PyEnvironment
         # create some env copies
         train_idxs={}
+        env_curriculum = EnvCurriculum()
         if self.collect:
             num_envs=2
             orig_env_list=[AdversarialTFPyEnvironment(orig_data) for i in range(num_envs)]
@@ -255,7 +255,7 @@ class AdversarialDriver(object):
             policy = agent.collect_policy
 
             policy_state = policy.get_initial_state(self.env.batch_size)
-            idx = choose_best_env_idx(filled_base_env_list, policy, policy_state)
+            idx = env_curriculum.choose_best_env_idx(filled_base_env_list, policy, policy_state)
             self.env = orig_env_list[idx]
             # for trajectories in trajectories_list:
             for traj in trajectories_list[idx]:
@@ -607,7 +607,8 @@ class AdversarialDriver(object):
         new_h = 400
         new_w = int(new_h * ratio)
         fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
-        im_dir = r'temp/images/steps/'
+        debug_dir = os.environ['debug_dir']
+        im_dir = debug_dir+'/images/steps/'
         if not os.path.exists(im_dir):
             os.makedirs(im_dir)
 
@@ -630,13 +631,13 @@ class AdversarialDriver(object):
                 new_h = 400
                 new_w = int(new_h * ratio)
                 x = cv2.resize(x, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
-                cv2.imwrite("temp/agent_view_" + str(int(num_steps.numpy())) + ".png", x)
+                cv2.imwrite(debug_dir+"/agent_view_" + str(int(num_steps.numpy())) + ".png", x)
 
                 x = self.env._envs[-1].render()
                 x = cv2.cvtColor(x, cv2.COLOR_RGB2BGR)
                 x = cv2.resize(x, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
                 writer.write(x)
-                cv2.imwrite("temp/real_view_" + str(int(num_steps.numpy())) + ".png", x)
+                cv2.imwrite(debug_dir+"/real_view_" + str(int(num_steps.numpy())) + ".png", x)
 
             x = self.env._envs[-1].render()
             x = cv2.cvtColor(x, cv2.COLOR_RGB2BGR)

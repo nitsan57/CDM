@@ -45,6 +45,7 @@ from social_rl.adversarial_env import adversarial_eval
 from social_rl.adversarial_env import adversarial_env_parallel
 from social_rl.adversarial_env import adversarial_env
 from social_rl.adversarial_env import adversarial_driver
+from social_rl.custom_printer import custom_printer
 
 
 # os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
@@ -103,6 +104,8 @@ flags.DEFINE_float('block_budget_weight', 0.,
                    'Coefficient used to impose block budget on the adversary.')
 flags.DEFINE_string('redirect', "False",
                     'redirect_prints_to_file')
+flags.DEFINE_string('dir', "temp",
+                    'save_debug_results')
 FLAGS = flags.FLAGS
 
 # Loss value that is considered too high and training will be terminated.
@@ -921,6 +924,8 @@ def train_eval_search_based(
 
 def main(_):
     os.environ["redirect"] = FLAGS.redirect
+    os.environ["debug_dir"] = FLAGS.dir
+    custom_printer("init -------------------")
 
     logging.set_verbosity(logging.INFO)
     train_eval(

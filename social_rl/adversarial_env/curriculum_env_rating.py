@@ -14,26 +14,16 @@ class EnvCurriculum(object):
         total_agnet_entropy = 0
         for i in range(num_to_sample):
             # TODO: FIND OUT MULTIPLE ENVS ISSUES
-            # for e in env._envs:
-            # time_step = [env.get_custom_obs(e.sample_random_state()) for e in env._envs]
-            # print("DEBUG BEFORE", len(env.reset_agent()), env.reset_agent().discount)
             time_step = env.reset_agent()
             time_step = env.sample_random_state()
-            # print("DEBUG", env._time_step_spec)
-            # print("DEBUG", type(time_step), len(time_step), time_step.discount, type(time_step.discount), time_step.discount.shape, type(time_step.discount.shape), policy._time_step_spec)
 
             action_step = policy.distribution(time_step, policy_state)
-            # import pdb
-            # pdb.set_trace()
-            # print("DEBUG2 ENTROPY", action_step.action[0])
             num_actions = len(action_step.action.logits_parameter()[0])
             probs = []
             for i in range(num_actions):
                 probs.append(action_step.action.prob(i).numpy())
             probs = np.array(probs)
-            # print("DEBUG2 ENTROPY", entropy(probs, base=num_actions))
             agnet_entropy = entropy(probs, base=num_actions)
-            # agnet_entropy = entropy(action_step, base=len(action_step))
             total_agnet_entropy += agnet_entropy
             # return to orig state
             env.reset_agent()
