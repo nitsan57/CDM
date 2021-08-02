@@ -111,7 +111,11 @@ class AdversarialDriver(object):
             if self.combined_population:
                 agent_r_max, train_idxs = self.combined_population_adversarial_episode()
             else:
-                agent_r_max, train_idxs = self.adversarial_episode()  # self.adversarial_episode_heuristic()
+                if "mode" in os.environ:
+                    agent_r_max, train_idxs = self.adversarial_episode_heuristic() #self.adversarial_episode() 
+                else:
+                    agent_r_max, train_idxs = self.adversarial_episode() 
+
         else:
             # Only one agent plays a randomly generated environment.
             agent_r_max, train_idxs = self.domain_randomization_episode()
@@ -243,7 +247,7 @@ class AdversarialDriver(object):
 
         env_curriculum = EnvCurriculum()
         if self.collect:
-            num_envs = 2
+            num_envs = 20
             orig_env_list = [AdversarialTFPyEnvironment(orig_data) for i in range(num_envs)]
             filled_base_env_list = []
             trajectories_list = []
@@ -259,7 +263,11 @@ class AdversarialDriver(object):
             policy = agent.collect_policy
 
             policy_state = policy.get_initial_state(self.env.batch_size)
-            idx = env_curriculum.choose_best_env_idx(filled_base_env_list, policy, policy_state)
+            if os.environ["mode"] == "entropy":
+                idx = env_curriculum.choose_best_env_idx_by_entropy(filled_base_env_list, policy, policy_state)
+            elif os.environ["mode"] == "history":
+                idx = env_curriculum.choose_best_env_idx_by_history(filled_base_env_list)
+
             self.env = orig_env_list[idx]
             # for trajectories in trajectories_list:
             for traj in trajectories_list[idx]:
@@ -320,6 +328,12 @@ class AdversarialDriver(object):
             self.adversary_env[env_idx].env_train_metric(env_reward)
         else:
             self.adversary_env[env_idx].env_eval_metric(env_reward)
+        
+        if os.environ["mode"] == "history":
+            self.env.reset_agnet()
+            env = self.env.render('rgb_array')
+            agent_reward = tf.reduce_mean(agent_r_avg).numpy()
+            env_curriculum.History[env] = agent_reward
 
         # Log metrics to console.
         if self.debug:
