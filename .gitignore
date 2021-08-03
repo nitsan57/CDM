@@ -2,6 +2,12 @@
 [Tt]humbs.db
 *.DS_Store
 
+#Outputs:
+*.out
+*.sh
+temp/
+results/
+
 #Visual Studio files
 *.[Oo]bj
 *.user

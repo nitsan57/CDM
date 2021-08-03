@@ -111,10 +111,10 @@ class AdversarialDriver(object):
             if self.combined_population:
                 agent_r_max, train_idxs = self.combined_population_adversarial_episode()
             else:
-                if "mode" in os.environ:
-                    agent_r_max, train_idxs = self.adversarial_episode_heuristic() #self.adversarial_episode() 
-                else:
+                if os.environ["mode"] == "original":
                     agent_r_max, train_idxs = self.adversarial_episode() 
+                else:
+                    agent_r_max, train_idxs = self.adversarial_episode_heuristic() #self.adversarial_episode() 
 
         else:
             # Only one agent plays a randomly generated environment.
@@ -267,6 +267,9 @@ class AdversarialDriver(object):
                 idx = env_curriculum.choose_best_env_idx_by_entropy(filled_base_env_list, policy, policy_state)
             elif os.environ["mode"] == "history":
                 idx = env_curriculum.choose_best_env_idx_by_history(filled_base_env_list)
+            else:
+                custom_print("HEURSITIC MODE NOT SUPPORTED!!! Will exit now..")
+                exit()
 
             self.env = orig_env_list[idx]
             # for trajectories in trajectories_list:

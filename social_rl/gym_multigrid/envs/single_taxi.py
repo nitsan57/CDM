@@ -559,7 +559,7 @@ class SingleTaxiEnv(discrete.DiscreteEnv):
         self.n_clutter_placed = 0
         self.adversary_step_count = 0
         self._str_map = self.create_empty_map(self.size)
-        self.desc = np.asarray(MAP, dtype='c')
+        self.desc = np.asarray(self._str_map, dtype='c')
 
         # Extra metrics
         self.reset_metrics()
