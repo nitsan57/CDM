@@ -762,7 +762,7 @@ elif hasattr(__loader__, 'fullname'):
     module_path = __loader__.fullname
 
 register.register(
-    env_id='MultiGrid-SingleTaxi-Adversarial-v0',
+    env_id='MultiGrid-SingleTaxi-v0',
     entry_point=module_path + ':SingleTaxiEnv'
 )
 

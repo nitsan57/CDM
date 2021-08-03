@@ -358,7 +358,6 @@ class FrozenLakeEnv(discrete.DiscreteEnv):
         transitions = self.P[self.s][a]
         i = discrete.categorical_sample([t[0] for t in transitions], self.np_random)  # only 0 index is chosen
         p, s, r, done = transitions[i]
-        print("REWARD", r)
         self.s = s
         self.lastaction = a
 
@@ -577,7 +576,7 @@ elif hasattr(__loader__, 'fullname'):
     module_path = __loader__.fullname
 
 register.register(
-    env_id='MultiGrid-FrozenEnv-Adversarial-v0',
+    env_id='MultiGrid-FrozenEnv-v0',
     entry_point=module_path + ':FrozenLakeEnv'
 )
 
