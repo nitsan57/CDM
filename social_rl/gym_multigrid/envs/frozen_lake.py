@@ -186,6 +186,7 @@ class FrozenLakeEnv(discrete.DiscreteEnv):
             print("OTHER MOD NOT SUPPORTED!!")
             assert n_agents == 1
 
+        self.origin_observation_space = self.observation_space
         self.adversary_action_space = gym.spaces.Discrete(self.adversary_action_dim)
         self.adversary_image_obs_space = gym.spaces.Box(
             low=0,
@@ -250,7 +251,7 @@ class FrozenLakeEnv(discrete.DiscreteEnv):
             done = bytes(newletter) in b"GH"
             reward = float(newletter == b"G")
             return newstate, reward, done
-
+        self.all_legal_states_to_random_sample = []
         for row in range(nrow):
             for col in range(ncol):
                 s = to_s(row, col)
@@ -260,6 +261,7 @@ class FrozenLakeEnv(discrete.DiscreteEnv):
                     if letter in b"GH":
                         li.append((1.0, s, 0, True))
                     else:
+                        self.all_legal_states_to_random_sample.append(s)
                         if is_slippery:
                             for b in [(a - 1) % 4, a, (a + 1) % 4]:
                                 li.append(
@@ -269,6 +271,7 @@ class FrozenLakeEnv(discrete.DiscreteEnv):
                             li.append((1.0, *update_probability_matrix(row, col, a)))
 
         super(FrozenLakeEnv, self).__init__(nS, nA, P, isd)
+        self.observation_space = self.origin_observation_space
 
     def get_map_image(self, adversarial=False):
         h, w = len(self._str_map), len(self._str_map[0])
