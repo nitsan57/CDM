@@ -129,6 +129,7 @@ class FrozenLakeEnv(discrete.DiscreteEnv):
         self.size = size
         self.choose_goal_last = False
         self.max_steps = max_steps
+        n_clutter = int(size*size*0.6)
         self.n_clutter = n_clutter
         self.random_z_dim = random_z_dim
         self.num_rows = self.size
@@ -287,8 +288,6 @@ class FrozenLakeEnv(discrete.DiscreteEnv):
                     cell_color = np.array(RGBCOLORS_MINUS_50.BLUE)  # gray-50
                 elif char == "H":
                     cell_color = np.array(RGBCOLORS_MINUS_50.BLACK)  # gray-50
-                elif char == "S":
-                    cell_color = np.array(RGBCOLORS_MINUS_50.MAGENTA)  # gray-50
                 elif char == "G":
                     cell_color = np.array(RGBCOLORS_MINUS_50.GREEN)  # gray-50
                 if (taxi_row, taxi_col) == (r_index, c_index):
