@@ -48,16 +48,16 @@ from social_rl import gym_multigrid
 from social_rl.adversarial_env import adversarial_env
 from social_rl.adversarial_env import utils
 from social_rl.multiagent_tfagents import multiagent_gym_suite
-
+import matplotlib.pyplot as plt
 
 flags.DEFINE_string(
     'root_dir', None,
     'Directory where videos and transfer results will be saved')
 flags.mark_flag_as_required('root_dir')
-flags.DEFINE_string(
-    'hparam_csv', None,
-    'Required to determine which checkpoints to load.')
-flags.mark_flag_as_required('hparam_csv')
+# flags.DEFINE_string(
+#     'hparam_csv', None,
+#     'Required to determine which checkpoints to load.')
+# flags.mark_flag_as_required('hparam_csv')
 flags.DEFINE_string(
     'transfer_csv', None,
     'If provided, will load this csv and continue saving to it')
@@ -445,6 +445,7 @@ class Experiment:
                           video_record_episodes=3, test_type='val', metric=None,
                           dr_ckpts=None):
         """Run all trials of all seeds for a particular environment."""
+        
         if env_name == self.adv_env_name and 'domain_randomization' in self.name:
             print(
                 'Skipping adversarial episodes for domain randomization environment')
@@ -454,7 +455,6 @@ class Experiment:
 
         if df is None:
             df = pd.DataFrame()
-
         for s in self.seeds:
             dr_equiv = self.find_dr_ckpt_equivalent(dr_ckpts, s)
 
@@ -687,6 +687,94 @@ def load_existing_transfer_file(transfer_dir, transfer_csv, test_on_test=False,
     return df, transfer_df_path
 
 
+def run_exp(experiments, root_dir, test_mini=False, test_on_test=False):
+    transfer_dir = os.path.join(root_dir, 'transfer_results')
+
+    # Set test environments
+    if test_mini:
+        mini_str = 'mini_'
+        val_envs = MINI_VAL_ENVS
+        test_envs = MINI_TEST_ENVS
+    else:
+        mini_str = ''
+        val_envs = VAL_ENVS
+        test_envs = TEST_ENVS
+
+    if not test_on_test:
+        test_envs = None
+        test_str = ''
+    else:
+        test_str = 'test_'
+    for exp in experiments:
+        # Produce video of adversary generating a training environment
+        dr_ckpts = None
+        exp.run_trials_in_env(exp.adv_env_name, num_trials=1, dr_ckpts=dr_ckpts)
+
+        df = test_experiment_in_environments(
+            exp, val_envs, df, transfer_df_path, unsuccessful_trials,
+            test_type='val', num_trials=num_trials, debug=True,
+            metric=metric, dr_ckpts=dr_ckpts)
+
+        # Save the transfer results after every exp since they're slow to obtain
+        with tf.io.gfile.GFile(transfer_df_path, 'wb') as f:
+            df.to_csv(f)
+
+        save_df_and_log(df, transfer_df_path)
+
+    # for i, exp in enumerate(experiments):  #
+    #     for ckpt in checkpoints_to_check[exp.exp_id]:
+    #         # Assign checkpoint to checkpoint nums before loading
+    #         exp.checkpoint_nums = {}
+    #         for s in exp.seeds:
+    #             exp.checkpoint_nums[s] = ckpt[len('policy_'):]
+
+    #         # Save seeds to re-assign later
+    #         exp_seeds = exp.seeds
+
+    #         print('Checking the following for experiment', exp.exp_id,
+    #               exp.name)
+    #         print(exp.checkpoint_nums)
+
+    #         exp.load(claim=False)
+
+    #         # Produce video of adversary generating a training environment
+    #         exp.run_trials_in_env(exp.adv_env_name, num_trials=1, dr_ckpts=dr_ckpts)
+
+    #         df = test_experiment_in_environments(
+    #             exp, val_envs, df, transfer_df_path, unsuccessful_trials,
+    #             test_type='val', num_trials=num_trials, debug=True,
+    #             metric=metric, dr_ckpts=dr_ckpts)
+
+    #         # Save the transfer results after every exp since they're slow to obtain
+    #         with tf.io.gfile.GFile(transfer_df_path, 'wb') as f:
+    #             df.to_csv(f)
+
+    #         save_df_and_log(df, transfer_df_path)
+
+    #         if test_envs:
+    #             df = test_experiment_in_environments(
+    #                 exp, test_envs, df, transfer_df_path, unsuccessful_trials,
+    #                 test_type='test', num_trials=num_trials, debug=debug,
+    #                 metric=metric, dr_ckpts=dr_ckpts)
+
+    #         # Re-assign seeds for next metric
+    #         exp.seeds = exp_seeds
+
+    #         save_df_and_log(df, transfer_df_path)
+    #         print('Finished checkpoint', ckpt, ' for experiment', exp.exp_id,
+    #               exp.name, '\n')
+
+    #     print('****** Finished experiment', exp.exp_id, exp.name, '*****\n')
+    #     print('Have finished', i + 1, '/', len(experiments), 'experiments, or',
+    #           float(i + 1) / float(len(experiments)) * 100.0, '%')
+
+    #     if unsuccessful_trials:
+    #         print('The following experiments were unsuccessful:')
+    #         print(unsuccessful_trials)
+
+    #     print('Finished testing all seeds for all experiments!!!')
+
+
 def generate_results(root_dir, experiments, test_on_test=False, test_mini=False,
                      transfer_csv=None, debug=False, num_trials=25,
                      name='', hparam_csv=None, fill_in_missing=False,
@@ -852,7 +940,7 @@ def generate_results(root_dir, experiments, test_on_test=False, test_mini=False,
                 metric=metric, dr_ckpts=dr_ckpts)
 
             # Save the transfer results after every exp since they're slow to obtain
-            with tf.gfile.GFile(transfer_df_path, 'wb') as f:
+            with tf.io.gfile.GFile(transfer_df_path, 'wb') as f:
                 df.to_csv(f)
 
             save_df_and_log(df, transfer_df_path)
@@ -954,33 +1042,153 @@ def checkpoint_present_for_all_seeds(ckpt, seed_checkpoints):
             return False
     return True
 
+def load_environment( env_name):
+    if 'Adversarial' in env_name:
+        py_env = adversarial_env.load(env_name)
+        tf_env = adversarial_env.AdversarialTFPyEnvironment(py_env)
+    else:
+        py_env = multiagent_gym_suite.load(env_name)
+        tf_env = tf_py_environment.TFPyEnvironment(py_env)
+    return py_env, tf_env
+
+def get_checkpoints_for_seed(model_path):
+    path = os.path.join(model_path)
+    path += '/policy_saved_model/agent/0/'
+    # if self.population:
+        # path = os.path.join(path, '0')
+    return tf.io.gfile.listdir(path)
+
+def get_latest_checkpoint(model_path):
+    """Finds the latest checkpoint number for a model."""
+    checkpoints = get_checkpoints_for_seed(model_path)
+    skip_idx = len('policy_')
+    if len(checkpoints) < 2:
+        return None
+    else:
+        # Get second last checkpoint to avoid errors where a currently-running XM
+        # job is in the process of saving some checkpoint that cannot actually
+        # be loaded yet.
+        return checkpoints[-2][skip_idx:]
+
+
+def load_checkpoints_for_seed(seed, agn):
+    """Loads most recent checkpoint for each agent for a given work unit."""
+    policy_path = os.path.join(*[self.model_path, seed, 'policy_saved_model'])
+    checkpoint_path = 'policy_' + self.checkpoint_nums[seed]
+
+    policies = {}
+
+    agents = ['agent', 'adversary_agent', 'adversary_env']
+    if 'unconstrained' in self.name or 'minimax' in self.name:
+        agents = ['agent', 'adversary_env']
+        policies['adversary_agent'] = [None]
+    elif 'domain_randomization' in self.name:
+        agents = ['agent']
+
+    for name in agents:
+        if not self.population:
+            path = os.path.join(*[policy_path, name, checkpoint_path])
+            print('\tLoading seed', seed, 'policy for', name, '...')
+            sys.stdout.flush()
+            policies[name] = [self.load_checkpoint_from_path(path)]
+        else:
+            # Population-based training runs have several agents of each type.
+            agent_path = os.path.join(policy_path, name)
+            policies[name] = []
+            pop_agents = tf.io.gfile.listdir(agent_path)
+            for pop in pop_agents:
+                path = os.path.join(*[agent_path, pop, checkpoint_path])
+                if tf.io.gfile.exists(path):
+                    print('\tLoading seed', seed, 'policy for', name, pop, '...')
+                    policies[name].append(self.load_checkpoint_from_path(path))
+    return policies
+
+def display_vid(frames):
+    img = None
+    for f in frames:
+        if img is None:
+            img = plt.imshow(f)
+        else:
+            img.set_data(f)
+        plt.pause(.1)
+        plt.draw()
+def run_agent(policy, py_env, tf_env,env_name=False):
+    """Run an agent's policy in a particular environment. Possibly record."""
+
+    encoded_images = []
+
+    # Add blank frames to make it easier to distinguish between runs/agents
+    # for _ in range(5):
+    #     encoded_images.append(py_env.render())
+
+    rewards = 0
+    policy_state = policy.get_initial_state(1)
+
+
+    # elif 'Adversarial' in env_name:
+    #     time_step = tf_env.reset_agent()
+    # else:
+    time_step = tf_env.reset()
+
+    encoded_images.append(py_env.render())  # pylint:disable=protected-access
+
+    num_steps = tf.constant(0.0)
+    while True:
+        policy_step = policy.action(time_step, policy_state=policy_state)
+
+        policy_state = policy_step.state
+        next_time_step = tf_env.step(policy_step.action)
+
+        traj = trajectory.from_transition(time_step, policy_step, next_time_step)
+        time_step = next_time_step
+
+        num_steps += tf.math.reduce_sum(tf.cast(~traj.is_boundary(), tf.float32))
+
+        rewards += time_step.reward
+
+        encoded_images.append(py_env.render())  # pylint:disable=protected-access
+
+        if traj.is_last():
+            break
+
+    return rewards.numpy().sum(), encoded_images
+
+
+def run_experiments_on_env(policies, env_name):
+    for i in range(5):
+        print('------------------')
+        py_env, tf_env = load_environment(env_name)
+        for j in range(i):
+            tf_env.reset()
+
+        reward, images = run_agent(policies['original'], py_env, tf_env)
+        
+        # display_vid(images)
+        print(f"original reward: {reward} on env: {env_name}")
+
+        py_env, tf_env = load_environment(env_name)
+        for j in range(i):
+            tf_env.reset()
+
+        reward, images = run_agent(policies['entropy'], py_env, tf_env)
+        # display_vid(images)
+        print(f"entropy reward: {reward} on env: {env_name}")
+
 
 def main(_):
-    logging.set_verbosity(logging.INFO)
+    all_env_names = MINI_TEST_ENVS
+    env_idx = 1
 
-    experiments = [
-        Experiment('paired', 17485886, num_agents=3,
-                   benchmark_against=[17486166, 17486367]),
-        Experiment('minimax', 17486367, num_agents=2),
-        Experiment('domain_randomization', 17486166, num_agents=1),
-    ]
-
-    utils.save_best_work_units_csv(experiments)
-    exit()
-    print('Name is', FLAGS.name)
-
-    if FLAGS.save_video_matrices:
-        for e in experiments:
-            e.save_matrices = True
-
-    generate_results(FLAGS.root_dir, experiments,
-                     transfer_csv=FLAGS.transfer_csv,
-                     hparam_csv=FLAGS.hparam_csv,
-                     test_on_test=FLAGS.test_on_test, test_mini=FLAGS.test_mini,
-                     debug=FLAGS.debug, num_trials=FLAGS.num_trials,
-                     name=FLAGS.name, fill_in_missing=FLAGS.fill_in_missing,
-                     metric=FLAGS.metric, reverse_order=FLAGS.reverse_order)
-
+    agent_names = ['original', 'entropy']
+    policies = {}
+    for a_n in agent_names:
+        path = f"/home/nitsan57/Downloads/{a_n}_policy_000499800"
+        policy = tf.compat.v2.saved_model.load(path)
+        policies[a_n] = policy
+    
+    for env_name in all_env_names:
+        # env_name = all_env_names[env_idx]
+        run_experiments_on_env(policies, env_name)
 
 if __name__ == '__main__':
     app.run(main)
