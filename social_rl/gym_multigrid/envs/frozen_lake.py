@@ -136,7 +136,7 @@ class FrozenLakeEnv(discrete.DiscreteEnv):
         self.num_columns = self.size
         self.adversary_action_dim = self.num_rows * self.num_columns
         self.adversary_max_steps = self.n_clutter + 2
-        self.fully_observed = False
+        self.fully_observed = True
         self.n_agents = 1
 
         # INIT MAP PARAMS
@@ -408,13 +408,23 @@ class FrozenLakeEnv(discrete.DiscreteEnv):
         # Place goal
         if current_turn == "choose_goal":
             self.update_map(row, col, "G")
+            self.goal_loc = (row, col)
 
         # Place the agent
         elif current_turn == "choose_agent":
             # self.init_taxi_row, self.init_taxi_col = [row, col]
             self.deliberate_agent_placement = 1
-            self.update_map(row, col, "S")
-            self.init_s = self.encode(row, col)
+            if (row, col) != self.goal_loc:
+                self.update_map(row, col, "S")
+                self.init_s = self.encode(row, col)
+            else:
+                
+                while (row, col) == self.goal_loc:
+                    row = np.random.randint(self.num_rows)
+                    col = np.random.randint(self.num_columns)
+
+                self.update_map(row, col, "S")
+                self.init_s = self.encode(row, col)
 
         # Place hollow
         elif self.adversary_step_count < self.adversary_max_steps:
