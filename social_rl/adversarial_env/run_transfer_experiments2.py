@@ -34,6 +34,8 @@ from absl import flags
 from absl import logging
 
 import numpy as np
+from numpy.core.defchararray import title
+from numpy.core.fromnumeric import sort
 import pandas as pd
 import tensorflow as tf  # tf
 
@@ -58,48 +60,16 @@ config.gpu_options.allow_growth = True
 session = InteractiveSession(config=config)
 
 import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+
 
 
 flags.DEFINE_string(
     'root_dir', None,
     'Directory where videos and transfer results will be saved')
 flags.mark_flag_as_required('root_dir')
-# flags.DEFINE_string(
-#     'hparam_csv', None,
-#     'Required to determine which checkpoints to load.')
-# flags.mark_flag_as_required('hparam_csv')
-flags.DEFINE_string(
-    'transfer_csv', None,
-    'If provided, will load this csv and continue saving to it')
-flags.DEFINE_boolean(
-    'test_on_test', False,
-    'If True, will also test on the test environments')
-flags.DEFINE_boolean(
-    'test_mini', False,
-    'If True, will test on the mini environments instead')
-flags.DEFINE_boolean(
-    'fill_in_missing', False,
-    'If True, will test load all existing transfer dfs and try to fill in the '
-    'missing data')
-flags.DEFINE_boolean(
-    'reverse_order', False,
-    'If True, will iterate through experiments in reverse order.')
-flags.DEFINE_string(
-    'metric', 'SolvedPathLength_best_ever',
-    'Metric to use for selecting which seeds to test.')
-flags.DEFINE_boolean(
-    'debug', False,
-    'If True, will only load 1 seed for each experiment for speed')
-flags.DEFINE_integer(
-    'num_trials', 10,
-    'Number of trials to do for each seed in each transfer environment')
-flags.DEFINE_boolean(
-    'save_video_matrices', False,
-    'If True, will also save matrix encodings of the environment state used to'
-    'make rendered videos')
-flags.DEFINE_string(
-    'name', 'Test transfer',
-    'Informative name to output to explain what process is running.')
+
 FLAGS = flags.FLAGS
 
 
@@ -133,7 +103,17 @@ MINI_TEST_ENVS = [
     'MultiGrid-MiniCluttered7-Minigrid-v0',
     'MultiGrid-MiniCluttered1-Minigrid-v0'
 ]
+ALL_ENVS = TEST_ENVS+MINI_VAL_ENVS+MINI_TEST_ENVS #+ VAL_ENVS
 
+BLACK_LIST_ENV_IDX = {env:[] for env in ALL_ENVS}
+
+def update_black_list():
+    BLACK_LIST_ENV_IDX["MultiGrid-Cluttered50-Minigrid-v0"] += [2,4, ]
+    BLACK_LIST_ENV_IDX["MultiGrid-MiniCluttered6-Minigrid-v0"] += [0,1,2 ]
+    BLACK_LIST_ENV_IDX["MultiGrid-MiniCluttered-Lava-Minigrid-v0"] +=[1]
+    BLACK_LIST_ENV_IDX["MultiGrid-MiniFourRooms-Minigrid-v0"] += [3, 4]
+    BLACK_LIST_ENV_IDX["MultiGrid-MiniCluttered7-Minigrid-v0"] +=[0,3,4 ]
+update_black_list()
 
 def load_environment( env_name):
     if 'Adversarial' in env_name:
@@ -145,33 +125,19 @@ def load_environment( env_name):
     return py_env, tf_env
 
 
-def display_vid(frames):
-    img = None
-    for f in frames:
-        if img is None:
-            img = plt.imshow(f)
-        else:
-            img.set_data(f)
-        plt.pause(.1)
-        plt.draw()
-
-
 def run_agent(policy, py_env, tf_env,env_name=False):
     """Run an agent's policy in a particular environment. Possibly record."""
 
     encoded_images = []
 
     # Add blank frames to make it easier to distinguish between runs/agents
-    # for _ in range(5):
-    #     encoded_images.append(py_env.render())
+    for _ in range(5):
+        encoded_images.append(py_env.render())
 
     rewards = 0
     policy_state = policy.get_initial_state(1)
 
 
-    # elif 'Adversarial' in env_name:
-    #     time_step = tf_env.reset_agent()
-    # else:
     time_step = tf_env.reset()
 
     encoded_images.append(py_env.render())  # pylint:disable=protected-access
@@ -198,69 +164,230 @@ def run_agent(policy, py_env, tf_env,env_name=False):
     return rewards.numpy().sum(), encoded_images
 
 
-def run_experiments_on_env(policies, env_name):
+def display_vid(frames, title):
+    img = None
+    plt.clf()
+
+    plt.title(title)
+    for f in frames:
+        if img is None:
+            img = plt.imshow(f)
+        else:
+            img.set_data(f)
+        
+        plt.pause(.1)
+        plt.draw()
+
+
+
+def run_policy(i, env_name, policy):
+    py_env, tf_env = load_environment(env_name)
+    for j in range(i):
+        tf_env.reset()
+
+    return run_agent(policy, py_env, tf_env)
+
+def run_experiments_on_env(policies, env_name,all_rewards, num__iters=5, display_vid=False):
     exp_names = []
-    original_reward = []
-    new_reward = []
-    for i in range(15):
+    all_vids = {agent_name:[] for agent_name in policies}
+    for i in range(num__iters):
+        if i in BLACK_LIST_ENV_IDX[env_name]:
+            # IF UN POSSIBLE ENV SKIP
+            continue
         exp_name = env_name + "_" + str(i)
         exp_names.append(exp_name)
-        py_env, tf_env = load_environment(env_name)
-        for j in range(i):
-            tf_env.reset()
-
-        reward, images = run_agent(policies['original'], py_env, tf_env)
-        reward = np.round(reward, 3)
-        original_reward.append(reward)
-        
-        # display_vid(images)
 
 
-        py_env, tf_env = load_environment(env_name)
-        for j in range(i):
-            tf_env.reset()
+        for agent_name in policies:
+            reward, images = run_policy(i, env_name, policies[agent_name])
+            reward = np.round(reward, 3)
+            all_rewards[agent_name].append(reward)
+            all_vids[agent_name].append(images)
 
-        reward, images = run_agent(policies['entropy'], py_env, tf_env)
-        reward = np.round(reward, 3)
-        new_reward.append(reward)
-        # display_vid(images)
-        if original_reward[-1] == 0 and new_reward[-1] == 0:
-            original_reward = original_reward[:-1]
-            new_reward = new_reward[:-1]
+        # remove 0 for-all reward results
+        num_empty_rewards = 0
+        for a_n , r_l in all_rewards.items():
+            if r_l[-1] == 0:
+                num_empty_rewards +=1
+
+        if num_empty_rewards == len(all_rewards.keys()):
+            exp_names = exp_names[:-1]
+            for agent_name in policies:
+                all_rewards[agent_name] = all_rewards[agent_name][:-1]
+                all_vids[agent_name] = all_vids[agent_name][:-1]
+
         else:
             print('------------------')
-            print(f"original reward: {original_reward[-1]} on env: {exp_name}")
-            print(f"entropy reward: {new_reward[-1]} on env: {exp_name}")
-    return exp_names, original_reward, new_reward
+            for agent_name in policies:
 
+                if display_vid:
+                    if all_rewards[agent_name] != 0:
+                        display_vid(all_vids[agent_name], agent_name)
 
-def main(_):
+                print(f"{agent_name} reward: {all_rewards[agent_name][-1]} on env: {exp_name}")
 
+    return exp_names, all_rewards
 
-
-# MINI_VAL_ENVS
-# MINI_TEST_ENVS 
-    all_env_names = MINI_TEST_ENVS + TEST_ENVS + MINI_VAL_ENVS + MINI_TEST_ENVS
+def compare_all_envs_train_rewards(all_env_names):
     env_idx = 1
 
-    agent_names = ['original', 'entropy']
+    agent_names = ['original', 'entropy', 'history']
     policies = {}
     for a_n in agent_names:
-        path = f"/home/nitsan/Downloads/{a_n}_policy_000499950"
+        path = f"/home/nitsan/Downloads/saved_policies/{a_n}_policy_latest"
         policy = tf.compat.v2.saved_model.load(path)
         policies[a_n] = policy
 
-    all_names, all_orig_rewards, all_new_rewards = [],[],[]
-    
+    all_names= []
+    all_rewards = {agent_name:[] for agent_name in policies}
+
     for env_name in all_env_names:
-        exp_names, original_reward, new_reward = run_experiments_on_env(policies, env_name)
+        exp_names, all_rewards = run_experiments_on_env(policies, env_name, all_rewards)
         all_names += exp_names
-        all_orig_rewards += original_reward
-        all_new_rewards += new_reward
     
-    df = pd.DataFrame({'env_names': all_names, 'orig_reward':all_orig_rewards , 'new_reward':all_new_rewards })
-    fig = px.line(df, x="env_names", y=['orig_reward', 'new_reward'], title='Reward compare')
+    pd_dict = {a_n: all_rewards[a_n] for a_n in all_rewards}
+    pd_dict['env_names'] = all_names
+    y = [a_n for a_n in all_rewards]
+    
+    df = pd.DataFrame(pd_dict)
+    fig = px.line(df, x="env_names", y=y, title='Reward compare')
     fig.show()
+
+def run_experiments_on_env_avg_reward(policies, env_name, all_rewards, num__iters=5, display_vid=False):
+    all_vids = {agent_name:[] for agent_name in policies}
+    num_envs_trained = 0
+    for i in range(num__iters):
+        if i in BLACK_LIST_ENV_IDX[env_name]:
+            # IF UN POSSIBLE ENV SKIP
+            continue
+        num_envs_trained +=1
+
+        exp_name = env_name + "_" + str(i)
+
+
+        for agent_name in policies:
+            reward, images = run_policy(i, env_name, policies[agent_name])
+            all_rewards[env_name][agent_name] +=reward
+            all_vids[agent_name].append(images)
+    
+    for agent_name in policies:
+        all_rewards[env_name][agent_name] = np.round(all_rewards[env_name][agent_name] /num_envs_trained, 3)
+
+    return all_rewards
+
+
+
+def compare_final_weights_avg_reward(all_env_names):
+
+    agent_names = ['original', 'entropy', 'history']
+    policies = {}
+    for a_n in agent_names:
+        path = f"/home/nitsan/Downloads/saved_policies/{a_n}_policy_latest"
+        policy = tf.compat.v2.saved_model.load(path)
+        policies[a_n] = policy
+
+    all_names= []
+    all_rewards = {env_name:{} for env_name in all_env_names}
+    for agent_name in policies:
+        for env_name in all_env_names:
+            all_rewards[env_name][agent_name] = 0
+
+    for env_name in all_env_names:
+        all_rewards = run_experiments_on_env_avg_reward(policies, env_name, all_rewards)
+        all_names.append(env_name)
+    
+    
+    color10_16 = ['blue', 'cyan', 'red', "yellow",  "green",  "orange"]
+    fig = make_subplots(rows=1, cols=len(all_env_names))
+    for i,env_name in enumerate(all_env_names):
+        fig.add_trace(
+            go.Bar(x=[agent_name for agent_name in policies], y=[all_rewards[env_name][agent_name] for agent_name in policies],name=env_name,marker_color=color10_16),row=1, col=(i+1))
+
+
+    fig.update_layout(height=600, width=800, title_text="Reward Comparation", legend=dict(
+    yanchor="bottom",
+    y=-0.5,
+    xanchor="right",
+    x=1
+))
+    fig.show()
+
+
+def run_experiments_on_env_curriculum_avg_reward(policy, env_name, num__iters=5, display_vid=False):
+    num_envs_trained = 0
+    avg_reward = 0
+    for i in range(num__iters):
+        if i in BLACK_LIST_ENV_IDX[env_name]:
+            # IF UN POSSIBLE ENV SKIP
+            continue
+        num_envs_trained +=1
+
+        reward, images = run_policy(i, env_name, policy)
+        avg_reward +=reward
+    
+        avg_reward = np.round(avg_reward /num_envs_trained, 3)
+
+    return avg_reward
+
+
+
+def compare_curriculum_weights_avg_reward(all_env_names):
+    agent_names = ['original', 'entropy', 'history']
+    policies = {}
+    path = "/home/nitsan/Downloads/saved_policies/"
+    
+    
+    all_rewards = {a_n:[] for a_n in agent_names}
+    x_axis = set()
+    for a_n in agent_names:
+        agent_weight_dirs = [ name for name in os.listdir(path) if (os.path.isdir(os.path.join(path, name)) and a_n in name) ]
+        agent_weight_dirs = np.sort(agent_weight_dirs)
+        for env_name in all_env_names:
+            for a_w in agent_weight_dirs:
+                policy = tf.compat.v2.saved_model.load(a_w)
+                policy_iter = a_w.split("_")[-1]
+                x_axis.add(policy_iter)
+                full_name = a_n + "_" + policy_iter
+                # policies[full_name] = policy
+                avg_reward = run_experiments_on_env_curriculum_avg_reward()
+                all_rewards[a_n].append(avg_reward)
+    
+    x_axis = list(x_axis)
+
+    color10_16 = ['blue', 'cyan', 'red', "yellow",  "green",  "orange"]
+    fig = make_subplots(rows=len(agent_names), cols=len(all_env_names))
+    for i,env_name in enumerate(all_env_names):
+        for j,agent_name in enumerate(policies):
+            fig.add_trace(
+                go.Line(x=x_axis, y=[all_rewards[agent_name]],name=env_name,marker_color=color10_16),row=(j+1), col=(i+1))
+
+
+    fig.update_layout(height=600, width=800, title_text="Reward Comparation", legend=dict(
+    yanchor="bottom",
+    y=-0.5,
+    xanchor="right",
+    x=1))
+
+    fig.show()
+
+
+
+
+
+
+def main(_):
+    # compare_curriculum_weights_avg_reward(ALL_ENVS)
+    # compare_final_weights_avg_reward(ALL_ENVS)
+
+    # compare_train_rewards()
+    # for env_name in ALL_ENVS:
+    #     py_env, tf_env = load_environment(env_name)
+    #     for i in range(5):
+    #         for j in range(i):
+    #             tf_env.reset()
+    #         plt.imshow(py_env.render())
+    #         plt.title(env_name + "_"+str(i))
+    #         plt.show()
 
 if __name__ == '__main__':
     app.run(main)

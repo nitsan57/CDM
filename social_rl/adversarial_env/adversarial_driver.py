@@ -51,6 +51,7 @@ class AdversarialDriver(object):
                  agent,
                  adversary_agent,
                  adversary_env,
+                 root_dir,
                  env_metrics=None,
                  collect=True,
                  disable_tf_function=False,
@@ -247,7 +248,7 @@ class AdversarialDriver(object):
 
         env_curriculum = EnvCurriculum()
         if self.collect:
-            num_envs = 20
+            num_envs = 50
             orig_env_list = [AdversarialTFPyEnvironment(orig_data) for i in range(num_envs)]
             filled_base_env_list = []
             trajectories_list = []
@@ -268,7 +269,7 @@ class AdversarialDriver(object):
             elif os.environ["mode"] == "history":
                 idx = env_curriculum.choose_best_env_idx_by_history(filled_base_env_list)
             else:
-                custom_print("HEURSITIC MODE NOT SUPPORTED!!! Will exit now..")
+                custom_printer("HEURSITIC MODE NOT SUPPORTED!!! Will exit now..")
                 exit()
 
             self.env = orig_env_list[idx]
@@ -337,6 +338,8 @@ class AdversarialDriver(object):
             env = self.env.render('rgb_array')
             agent_reward = tf.reduce_mean(agent_r_avg).numpy()
             env_curriculum.History[env] = agent_reward
+            env_curriculum.save_history()
+
 
         # Log metrics to console.
         if self.debug:

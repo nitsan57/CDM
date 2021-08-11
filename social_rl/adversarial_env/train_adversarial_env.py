@@ -40,6 +40,8 @@ from absl import app
 from absl import flags
 from absl import logging
 import gin
+import pickle
+
 from social_rl.adversarial_env import agent_train_package
 from social_rl.adversarial_env import adversarial_eval
 from social_rl.adversarial_env import adversarial_env_parallel
@@ -356,6 +358,7 @@ def train_eval(
             agents['agent'],
             adversary_agent,
             adversary_env,
+            root_dir=FLAGS.root_dir,
             env_metrics=env_train_metrics,
             collect=True,
             disable_tf_function=True,  # TODO(natashajaques): enable tf functions
@@ -367,6 +370,7 @@ def train_eval(
             agents['agent'],
             adversary_agent,
             adversary_env,
+            root_dir=FLAGS.root_dir,
             env_metrics=env_eval_metrics,
             collect=False,
             disable_tf_function=True,  # TODO(natashajaques): enable tf functions
@@ -734,6 +738,8 @@ def train_eval_search_based(
             agents['agent'],
             adversary_agent,
             adversary_env,
+            root_dir=FLAGS.root_dir,
+
             env_metrics=env_train_metrics,
             collect=True,
             disable_tf_function=True,  # TODO(natashajaques): enable tf functions
@@ -745,6 +751,7 @@ def train_eval_search_based(
             agents['agent'],
             adversary_agent,
             adversary_env,
+            root_dir=FLAGS.root_dir,
             env_metrics=env_eval_metrics,
             collect=False,
             disable_tf_function=True,  # TODO(natashajaques): enable tf functions
@@ -925,6 +932,28 @@ def train_eval_search_based(
 def main(_):
     os.environ["redirect"] = FLAGS.redirect
     os.environ["debug_dir"] = FLAGS.dir
+
+    f_name = os.join(FLAGS.root_dir,"context.pickle")
+    if os.path.isfile(f_name):
+        with open(f_name, 'rb') as handle:
+            all_environs = pickle.load(handle)
+            for e,v in all_environs.items():
+                os.environ[e] = v
+
+    else:
+
+        mode = os.environ["mode"]
+        red = os.environ["redirect"]
+        d_dir = os.environ["debug_dir"]
+        all_environs = {}       
+        all_environs["mode"] = mode
+        all_environs["redirect"] = red
+        all_environs["debug_dir"] = d_dir
+        with open(f_name, 'wb') as handle:
+            pickle.dump(all_environs, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+
+    
     custom_printer("init -------------------")
 
     logging.set_verbosity(logging.INFO)

@@ -1,11 +1,21 @@
 import numpy as np
 from scipy.stats import entropy
 from social_rl.custom_printer import custom_printer
-
+import os
+import pickle
 
 class EnvCurriculum(object):
-    def __init__(self) -> None:
+    def __init__(self, root_dir) -> None:
+
         self.History = dict()
+        
+
+        f_name = os.join(root_dir,"history.pickle")
+        self.f_name = f_name
+        if os.path.isfile(f_name):
+            with open(f_name, 'rb') as handle:
+                self.History = pickle.load(handle)
+            
 
     def eval_env_entropy(self, env, policy, policy_state):
         # TODO: CALC ~10% of num states
@@ -39,7 +49,7 @@ class EnvCurriculum(object):
         scores = np.array(scores)
         idx = np.argsort(scores)[len(scores) // 2]
         # idx = (np.abs(scores - 0.5)).argmin()
-        custom_printer(f"DEBUG score list: {scores}, {idx}")
+        custom_printer(f"DEBUG entropy sampled: {scores[idx]}")
         return idx
 
     def eval_env_history_dist(self, env):
@@ -53,6 +63,11 @@ class EnvCurriculum(object):
         return min_dist
 
         # return total_agnet_entropy / num_to_sample
+
+    def save_history(self):
+        f_name = self.f_name
+        with open(f_name, 'wb') as handle:
+            pickle.dump(self.History, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     def choose_best_env_idx_by_history(self, env_list):
         new_envs_list = []
@@ -81,5 +96,3 @@ class EnvCurriculum(object):
                 if reward < min_reward:
                     min_reward_env_idx = i
             return min_reward_env_idx
-
-        return idx
