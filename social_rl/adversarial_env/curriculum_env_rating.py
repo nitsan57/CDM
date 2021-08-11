@@ -10,7 +10,7 @@ class EnvCurriculum(object):
         self.History = dict()
         
 
-        f_name = os.join(root_dir,"history.pickle")
+        f_name = os.path.join(root_dir,"history.pickle")
         self.f_name = f_name
         if os.path.isfile(f_name):
             with open(f_name, 'rb') as handle:

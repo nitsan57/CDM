@@ -933,7 +933,7 @@ def main(_):
     os.environ["redirect"] = FLAGS.redirect
     os.environ["debug_dir"] = FLAGS.dir
 
-    f_name = os.join(FLAGS.root_dir,"context.pickle")
+    f_name = os.path.join(FLAGS.root_dir,"context.pickle")
     if os.path.isfile(f_name):
         with open(f_name, 'rb') as handle:
             all_environs = pickle.load(handle)
