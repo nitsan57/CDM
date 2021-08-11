@@ -934,7 +934,7 @@ def main(_):
     os.environ["debug_dir"] = FLAGS.dir
 
     f_name = os.path.join(FLAGS.root_dir,"context.pickle")
-    if os.path.isfile(f_name):
+    if os.path.exists(f_name):
         with open(f_name, 'rb') as handle:
             all_environs = pickle.load(handle)
             for e,v in all_environs.items():

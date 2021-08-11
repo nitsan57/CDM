@@ -12,7 +12,7 @@ class EnvCurriculum(object):
 
         f_name = os.path.join(root_dir,"history.pickle")
         self.f_name = f_name
-        if os.path.isfile(f_name):
+        if os.path.exists(f_name):
             with open(f_name, 'rb') as handle:
                 self.History = pickle.load(handle)
             
