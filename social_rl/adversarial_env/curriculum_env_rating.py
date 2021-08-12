@@ -3,6 +3,7 @@ from scipy.stats import entropy
 from social_rl.custom_printer import custom_printer
 import os
 import pickle
+import cv2
 
 class EnvCurriculum(object):
     def __init__(self, root_dir) -> None:
@@ -52,12 +53,13 @@ class EnvCurriculum(object):
         custom_printer(f"DEBUG entropy sampled: {scores[idx]}")
         return idx
 
+
     def eval_env_history_dist(self, env):
-        env = np.array(env)
-        min_dist = np.sum(np.ones_like(env))
+        env_img = cv2.cvtColor(env._envs[-1].render(), cv2.COLOR_BGR2GRAY) 
+        min_dist = np.sum(np.ones_like(env_img)*np.max(env_img))
         for seen_env in self.History:
             seen_env = np.array(seen_env)
-            dist = np.sum(np.abs(seen_env - env))
+            dist = np.sum(np.abs(seen_env - env_img))
             if dist < min_dist:
                 min_dist = dist
         return min_dist

@@ -85,6 +85,7 @@ class AdversarialDriver(object):
         common.check_tf1_allowed()
         self.debug = debug
         self.total_episodes_collected = 0
+        self.root_dir = root_dir
 
         if not disable_tf_function:
             self.run = common.function(self.run, autograph=True)
@@ -139,7 +140,7 @@ class AdversarialDriver(object):
         train_idxs = {}
         # import pdb
         # pdb.set_trace()
-        env_curriculum = EnvCurriculum()
+        env_curriculum = EnvCurriculum(self.root_dir)
         if self.collect:
             num_envs = 20
             orig_env_list = [AdversarialTFPyEnvironment(orig_data) for i in range(num_envs)]
@@ -235,6 +236,13 @@ class AdversarialDriver(object):
 
         return agent_r_max, train_idxs
 
+
+    def totuple(self, a):
+        try:
+            return tuple(self.totuple(i) for i in a)
+        except TypeError:
+            return a
+
     def adversarial_episode_heuristic(self):
         """Episode in which adversary constructs environment and agents play it."""
         # Build environment with adversary.
@@ -246,7 +254,7 @@ class AdversarialDriver(object):
         train_idxs = {}
         custom_printer(f"ENVIRONEMNT NUMBER: {self.total_episodes_collected}")
 
-        env_curriculum = EnvCurriculum()
+        env_curriculum = EnvCurriculum(self.root_dir)
         if self.collect:
             num_envs = 50
             orig_env_list = [AdversarialTFPyEnvironment(orig_data) for i in range(num_envs)]
@@ -335,7 +343,7 @@ class AdversarialDriver(object):
         
         if os.environ["mode"] == "history":
             self.env.reset_agent()
-            env = str(self.env._envs[-1].render())
+            env = self.totuple(cv2.cvtColor(env._envs[-1].render(), cv2.COLOR_BGR2GRAY))
             agent_reward = tf.reduce_mean(agent_r_avg).numpy()
             env_curriculum.History[env] = agent_reward
             env_curriculum.save_history()

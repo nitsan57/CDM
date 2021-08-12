@@ -932,7 +932,10 @@ def train_eval_search_based(
 def main(_):
     os.environ["redirect"] = FLAGS.redirect
     os.environ["debug_dir"] = FLAGS.dir
-
+    try:
+        os.makedirs(FLAGS.root_dir)
+    except:
+        pass
     f_name = os.path.join(FLAGS.root_dir,"context.pickle")
     if os.path.exists(f_name):
         with open(f_name, 'rb') as handle:
