@@ -69,7 +69,7 @@ class EnvCurriculum(object):
     def save_history(self):
         f_name = self.f_name
         with open(f_name, 'wb') as handle:
-            pickle.dump(self.History, handle, protocol=pickle.HIGHEST_PROTOCOL)
+            pickle.dump(self.History, handle)
 
     def choose_best_env_idx_by_history(self, env_list):
         new_envs_list = []
