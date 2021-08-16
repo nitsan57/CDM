@@ -343,7 +343,7 @@ class AdversarialDriver(object):
         
         if os.environ["mode"] == "history":
             self.env.reset_agent()
-            env = self.totuple(cv2.cvtColor(env._envs[-1].render(), cv2.COLOR_BGR2GRAY))
+            env = self.totuple(cv2.cvtColor(self.env._envs[-1].render(), cv2.COLOR_BGR2GRAY))
             agent_reward = tf.reduce_mean(agent_r_avg).numpy()
             env_curriculum.History[env] = agent_reward
             env_curriculum.save_history()

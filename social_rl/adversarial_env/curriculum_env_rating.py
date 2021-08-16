@@ -10,12 +10,12 @@ class EnvCurriculum(object):
 
         self.History = dict()
         
-
-        f_name = os.path.join(root_dir,"history.pickle")
-        self.f_name = f_name
-        if os.path.exists(f_name):
-            with open(f_name, 'rb') as handle:
-                self.History = pickle.load(handle)
+        if os.environ["mode"] == "history":
+            f_name = os.path.join(root_dir,"history.pickle")
+            self.f_name = f_name
+            if os.path.exists(f_name):
+                with open(f_name, 'rb') as handle:
+                    self.History = pickle.load(handle)
             
 
     def eval_env_entropy(self, env, policy, policy_state):
