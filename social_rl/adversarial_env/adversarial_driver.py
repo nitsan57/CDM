@@ -40,8 +40,6 @@ from tf_agents.utils import nest_utils
 import os
 import copy
 
-from social_rl.adversarial_env.curriculum_env_rating import EnvCurriculum
-
 
 class AdversarialDriver(object):
     """Runs the environment adversary and agents to collect episodes."""
@@ -51,7 +49,9 @@ class AdversarialDriver(object):
                  agent,
                  adversary_agent,
                  adversary_env,
+                 custom_env_list,
                  root_dir,
+                 env_curriculum,
                  env_metrics=None,
                  collect=True,
                  disable_tf_function=False,
@@ -83,6 +83,8 @@ class AdversarialDriver(object):
             calculating the regret depends on which has the lowest score.
         """
         common.check_tf1_allowed()
+        self.custom_env_list = custom_env_list
+        self.env_curriculum = env_curriculum
         self.debug = debug
         self.total_episodes_collected = 0
         self.root_dir = root_dir
@@ -132,107 +134,74 @@ class AdversarialDriver(object):
         """Episode in which adversary constructs environment and agents play it."""
         # Build environment with adversary.
 
-        ###NEW LOGIC###
-        from social_rl.adversarial_env.adversarial_env import AdversarialTFPyEnvironment
-        orig_data = self.env.data_PyEnvironment
-        custom_printer(f"ENVIRONEMNT NUMBER: {self.total_episodes_collected}")
-        # create some env copies
-        train_idxs = {}
-        # import pdb
-        # pdb.set_trace()
-        env_curriculum = EnvCurriculum(self.root_dir)
-        if self.collect:
-            num_envs = 20
-            orig_env_list = [AdversarialTFPyEnvironment(orig_data) for i in range(num_envs)]
-            filled_base_env_list = []
-            trajectories_list = []
-            for i in range(len(orig_env_list)):
-                _, _, env_idx, trajectories = self.run_agent(
-                    orig_env_list[i], self.adversary_env, self.env.reset, self.env.step_adversary, gen_env_mode=True)
-                trajectories_list.append(trajectories)
-                filled_base_env_list.append(orig_env_list[i])
 
+        ##  : COMLETE 
+
+
+        train_idxs = {}
+        if self.collect:
+            
             agent_idx = np.random.choice(len(self.agent))
             agent = self.agent[agent_idx]
-            # custom_printer(f"AGNET_RUNNING ON SAMPLED STATE:{agent.name}")
             policy = agent.collect_policy
 
             policy_state = policy.get_initial_state(self.env.batch_size)
-            idx = env_curriculum.choose_best_env_idx(filled_base_env_list, policy, policy_state)
-            self.env = orig_env_list[idx]
-            # for trajectories in trajectories_list:
-            for traj in trajectories_list[idx]:
-                for obs in self.adversary_env[0].observers:
-                    obs(traj)
+            num_envs = 50
+            orig_env_list = self.custom_env_list
+            #   
+            trajectories_list = []
 
-            train_idxs = {'adversary_env': [agent_idx]}
-            ####
+            env_idx = self.env_curriculum.create_env_greedy(orig_env_list, policy, policy_state)
+            train_idxs = {}
+            custom_printer(f"ENVIRONEMNT NUMBER: {self.total_episodes_collected}")
+            ########################################################
+            # DEBUG ENV
+            # x = self.env._envs[-1].render()
+            # x = cv2.cvtColor(x, cv2.COLOR_RGB2BGR)
+            # print("EPISODE NUMBER", self.total_episodes_collected)
+            # h, w, c = x.shape
+            # ratio = w / h
+            # new_h = 400
+            # new_w = int(new_h * ratio)
+            # x = cv2.resize(x, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
+            # cv2.imwrite(r"temp/images/" + str(self.total_episodes_collected) + ".png", x)
+            ########################################################
+
         else:
-            # Build environment with adversary.
-            _, _, env_idx = self.run_agent(
-                self.env, self.adversary_env, self.env.reset, self.env.step_adversary)
-            train_idxs = {'adversary_env': [env_idx]}
+            return -1, -1
+            # Build environment
+            agent_idx = np.random.choice(len(self.agent))
+            agent = self.agent[agent_idx]
+            policy = agent.collect_policy
+            policy_state = policy.get_initial_state(self.env.batch_size)
 
+            env_idx = self.env_curriculum.create_env_greedy([self.env], policy, policy_state)
         # Run protagonist in generated environment.
         agent_r_avg, agent_r_max, agent_idx = self.run_agent(
             self.env, self.agent, self.env.reset_agent, self.env.step)
         train_idxs['agent'] = [agent_idx]
         # print("end of run:", agent_r_avg)
 
-        # Run antagonist in generated environment.
-        if self.adversary_agent:
-            adv_agent_r_avg, adv_agent_r_max, antag_idx = self.run_agent(
-                self.env, self.adversary_agent, self.env.reset_agent, self.env.step)
-            train_idxs['adversary_agent'] = [antag_idx]
-        # print("end of run:", adv_agent_r_avg)
 
-        # Use agents' reward to compute and set regret-based rewards for PAIRED.
-        # By default, regret = max(antagonist) - mean(protagonist).
-        if self.adversary_agent:
-            self.adversary_agent[antag_idx].enemy_max = agent_r_max
-            self.agent[agent_idx].enemy_max = adv_agent_r_max
-            if self.flexible_protagonist:
-                # In flexible protagonist case, we find the best-performing agent
-                # and compute regret = max(best) - mean(other).
-                protagonist_better = tf.cast(tf.math.greater(agent_r_max, adv_agent_r_max), tf.float32)
-                env_reward = protagonist_better * (agent_r_max - adv_agent_r_avg) + (1 - protagonist_better) * (adv_agent_r_max - agent_r_avg)
-                adv_agent_r_max = protagonist_better * agent_r_max + (1 - protagonist_better) * adv_agent_r_max
-            elif self.adversary_env[env_idx].non_negative_regret:
-                # Clip regret signal so that it can't go below zero.
-                env_reward = tf.math.maximum(adv_agent_r_max - agent_r_avg, 0)
-            else:
-                # Regret = max(antagonist) - mean(protagonist)
-                env_reward = adv_agent_r_max - agent_r_avg
 
-            # Add adversary block budget.
-            env_reward += self.compute_adversary_block_budget(
-                adv_agent_r_max, env_idx)
 
-        # Minimax adversary reward.
-        else:
-            env_reward = -agent_r_avg
 
-        self.adversary_env[env_idx].final_reward = env_reward
+        # env_reward = 0
+        # self.adversary_env[env_idx].final_reward = env_reward
 
-        # Log metrics to tensorboard.
-        if self.collect:
-            self.adversary_env[env_idx].env_train_metric(env_reward)
-        else:
-            self.adversary_env[env_idx].env_eval_metric(env_reward)
+        # # Log metrics to tensorboard.
+        # if self.collect:
+        #     self.adversary_env[env_idx].env_train_metric(env_reward)
+        # else:
+        #     self.adversary_env[env_idx].env_eval_metric(env_reward)
 
         # Log metrics to console.
+
         if self.debug:
             custom_printer(f'Agent reward: avg = {tf.reduce_mean(agent_r_avg).numpy()}, max = {tf.reduce_mean(agent_r_max).numpy()}')
             logging.info('Agent reward: avg = %f, max = %f',
                          tf.reduce_mean(agent_r_avg).numpy(),
                          tf.reduce_mean(agent_r_max).numpy())
-            logging.info('Environment score: %f',
-                         tf.reduce_mean(env_reward).numpy())
-            if self.adversary_agent:
-                custom_printer(f'Adversary Agent reward: avg = {tf.reduce_mean(adv_agent_r_avg).numpy()}, max = {tf.reduce_mean(adv_agent_r_max).numpy()}')
-                logging.info('Adversary agent reward: avg = %f, max = %f',
-                             tf.reduce_mean(adv_agent_r_avg).numpy(),
-                             tf.reduce_mean(adv_agent_r_max).numpy())
 
         return agent_r_max, train_idxs
 
@@ -248,34 +217,35 @@ class AdversarialDriver(object):
         # Build environment with adversary.
 
         ###NEW LOGIC###
-        from social_rl.adversarial_env.adversarial_env import AdversarialTFPyEnvironment
-        orig_data = self.env.data_PyEnvironment
         # create some env copies
         train_idxs = {}
         custom_printer(f"ENVIRONEMNT NUMBER: {self.total_episodes_collected}")
 
-        env_curriculum = EnvCurriculum(self.root_dir)
+        # env_curriculum = EnvCurriculum(self.root_dir)
         if self.collect:
-            num_envs = 50
-            orig_env_list = [AdversarialTFPyEnvironment(orig_data) for i in range(num_envs)]
+            orig_env_list = self.custom_env_list
             filled_base_env_list = []
             trajectories_list = []
             for i in range(len(orig_env_list)):
                 _, _, env_idx, trajectories = self.run_agent(
-                    orig_env_list[i], self.adversary_env, self.env.reset, self.env.step_adversary, gen_env_mode=True)
+                    orig_env_list[i], self.adversary_env, orig_env_list[i].reset, orig_env_list[i].step_adversary, gen_env_mode=True)
                 trajectories_list.append(trajectories)
                 filled_base_env_list.append(orig_env_list[i])
 
             agent_idx = np.random.choice(len(self.agent))
+            # import matplotlib.pyplot as plt
+            # for e in filled_base_env_list:
+                # plt.imshow(e._envs[-1].render())
+                # plt.show()
             agent = self.agent[agent_idx]
             # custom_printer(f"AGNET_RUNNING ON SAMPLED STATE:{agent.name}")
             policy = agent.collect_policy
 
             policy_state = policy.get_initial_state(self.env.batch_size)
             if os.environ["mode"] == "entropy":
-                idx = env_curriculum.choose_best_env_idx_by_entropy(filled_base_env_list, policy, policy_state)
+                idx = self.env_curriculum.choose_best_env_idx_by_entropy(filled_base_env_list, policy, policy_state)
             elif os.environ["mode"] == "history":
-                idx = env_curriculum.choose_best_env_idx_by_history(filled_base_env_list)
+                idx = self.env_curriculum.choose_best_env_idx_by_history(filled_base_env_list)
             else:
                 custom_printer("HEURSITIC MODE NOT SUPPORTED!!! Will exit now..")
                 exit()
@@ -345,8 +315,8 @@ class AdversarialDriver(object):
             self.env.reset_agent()
             env = self.totuple(cv2.cvtColor(self.env._envs[-1].render(), cv2.COLOR_BGR2GRAY))
             agent_reward = tf.reduce_mean(agent_r_avg).numpy()
-            env_curriculum.History[env] = agent_reward
-            env_curriculum.save_history()
+            self.env_curriculum.History[env] = agent_reward
+            self.env_curriculum.save_history()
 
 
         # Log metrics to console.
@@ -651,7 +621,14 @@ class AdversarialDriver(object):
         writer = cv2.VideoWriter(im_dir + str(self.total_episodes_collected) + "_" + agent.name + ".mp4", fourcc, 15, (new_w, new_h))
 
         while num_steps < agent.max_steps:
+
             action_step = policy.action(time_step, policy_state)
+            # if self.collect:
+                # print(self.collect)
+                # print(action_step.action)
+                # print(type(action_step.action))
+                # print(action_step.action.shape)
+                # exit()
             next_time_step = step_func(action_step.action)
 
             if False:  # for debug only

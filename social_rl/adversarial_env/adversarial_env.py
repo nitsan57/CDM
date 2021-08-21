@@ -382,7 +382,6 @@ class AdversarialTFPyEnvironment(tf_py_environment.TFPyEnvironment):
         # Prevent parent class from using its own batched environment
         super(AdversarialTFPyEnvironment, self).__init__(
             environment, check_dims=check_dims, isolation=isolation)
-        self.data_PyEnvironment = environment
         if not environment.batched:
             self._env = AdversarialBatchedPyEnvironment(
                 [environment], multithreading=not self._pool)

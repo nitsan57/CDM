@@ -1,14 +1,19 @@
+from operator import le
 import numpy as np
+from numpy.core.arrayprint import printoptions
 from scipy.stats import entropy
 from social_rl.custom_printer import custom_printer
 import os
 import pickle
 import cv2
+import tensorflow as tf
 
 class EnvCurriculum(object):
     def __init__(self, root_dir) -> None:
 
         self.History = dict()
+        self.curr_d_param = 1 # param change rate
+        self.params_vector = []
         
         if os.environ["mode"] == "history":
             f_name = os.path.join(root_dir,"history.pickle")
@@ -16,6 +21,15 @@ class EnvCurriculum(object):
             if os.path.exists(f_name):
                 with open(f_name, 'rb') as handle:
                     self.History = pickle.load(handle)
+
+        if os.environ["mode"] == "search":
+            f_name = os.path.join(root_dir,"search.pickle")
+            self.f_name = f_name
+            if os.path.exists(f_name):
+                with open(f_name, 'rb') as handle:
+                    search_parmas = pickle.load(handle)
+                    self.params_vector = search_parmas['vector']
+                    self.curr_d_param = search_parmas['d_param']
             
 
     def eval_env_entropy(self, env, policy, policy_state):
@@ -42,7 +56,7 @@ class EnvCurriculum(object):
 
         return total_agnet_entropy / num_to_sample
 
-    def choose_best_env_idx_by_entropy(self, env_list, policy, policy_state):
+    def choose_best_env_idx_by_entropy(self, env_list, policy, policy_state, return_seq=False):
         scores = []
         for env in env_list:
             scores.append(self.eval_env_entropy(env, policy, policy_state))
@@ -51,7 +65,10 @@ class EnvCurriculum(object):
         idx = np.argsort(scores)[len(scores) // 2]
         # idx = (np.abs(scores - 0.5)).argmin()
         custom_printer(f"DEBUG entropy sampled: {scores[idx]}")
-        return idx
+        if return_seq is False:
+            return idx
+        else:
+            return idx, scores
 
 
     def eval_env_history_dist(self, env):
@@ -98,3 +115,56 @@ class EnvCurriculum(object):
                 if reward < min_reward:
                     min_reward_env_idx = i
             return min_reward_env_idx
+
+
+
+    def create_env_greedy(self, env_list, policy, policy_state):
+        last_param_vector = self.params_vector
+        adversary_action_dim = env_list[0]._envs[-1].adversary_action_dim
+        max_length = env_list[0]._envs[-1].adversary_max_steps
+
+        if self.params_vector == []:
+            self.params_vector = np.zeros(max_length)
+
+
+
+
+        max_var_bound = (adversary_action_dim**2) / 4
+        all_params_vectors = []
+        for i,env in enumerate(env_list):
+            changed_params = 0
+            current_param_vector = np.copy(self.params_vector)
+            while changed_params < self.curr_d_param:
+                chosen_idx = np.random.choice(max_length)
+                chosen_d_param = np.random.choice(adversary_action_dim)
+                old_param = current_param_vector[chosen_idx]
+                current_param_vector[chosen_idx] = chosen_d_param
+
+                changed_params +=1
+
+            all_params_vectors.append(current_param_vector)
+
+            for j in range(len(current_param_vector)):
+                adversary_action = tf.convert_to_tensor(np.array([current_param_vector[j]]))
+                env.step_adversary(adversary_action)
+
+        # import matplotlib.pyplot as plt
+        # for i,e in enumerate(env_list):
+        #     print(all_params_vectors[i])
+        #     plt.imshow(e._envs[-1].render())
+        #     plt.show()
+
+        idx, scores = self.choose_best_env_idx_by_entropy(env_list, policy, policy_state, return_seq=True)
+        curr_step_variance = np.var(scores)
+        if (curr_step_variance / max_var_bound) < 0.2 and self.curr_d_param < (adversary_action_dim*max_length // 2):
+            #increase parameter change by 1 if variance too small
+            self.curr_d_param +=1
+        self.params_vector = all_params_vectors[idx]              
+
+
+        f_name = self.f_name
+        search_parmas = {}
+        with open(f_name, 'wb') as handle:
+            search_parmas['vector'] = self.params_vector
+            search_parmas['d_param'] = self.curr_d_param
+            pickle.dump(self.search_parmas, handle)

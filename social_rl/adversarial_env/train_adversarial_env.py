@@ -26,6 +26,7 @@ python -m train_adversarial_env --root_dir=/tmp/adversarial_env/
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
+
 from tf_agents.metrics import tf_metrics
 from tf_agents.system import system_multiprocessing
 from social_rl import gym_multigrid  # Import needed to trigger env registration, so pylint: disable=unused-import
@@ -48,6 +49,15 @@ from social_rl.adversarial_env import adversarial_env_parallel
 from social_rl.adversarial_env import adversarial_env
 from social_rl.adversarial_env import adversarial_driver
 from social_rl.custom_printer import custom_printer
+
+from social_rl.adversarial_env.curriculum_env_rating import EnvCurriculum
+
+from tensorflow.compat.v1 import ConfigProto
+from tensorflow.compat.v1 import InteractiveSession
+
+config = ConfigProto()
+config.gpu_options.allow_growth = True
+session = InteractiveSession(config=config)
 
 
 # os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
@@ -188,7 +198,6 @@ def train_eval(
 
     if root_dir is None:
         raise AttributeError('train_eval requires a root_dir.')
-
     gym_env = adversarial_env.load(env_name)
 
     # Set up logging
@@ -215,9 +224,15 @@ def train_eval(
         eval_tf_env = adversarial_env.AdversarialTFPyEnvironment(
             adversarial_env_parallel.AdversarialParallelPyEnvironment(
                 [lambda: adversarial_env.load(env_name)] * num_eval_episodes))
+        
         tf_env = adversarial_env.AdversarialTFPyEnvironment(
             adversarial_env_parallel.AdversarialParallelPyEnvironment(
                 [lambda: adversarial_env.load(env_name)] * num_parallel_envs))
+            
+        orig_env_list = []
+        num_envs = 50
+        orig_env_list = [adversarial_env.AdversarialTFPyEnvironment(adversarial_env_parallel.AdversarialParallelPyEnvironment(
+                [lambda: adversarial_env.load(env_name)] * 1)) for i in range(num_envs)]
 
         logging.info('Preparing to train...')
         environment_steps_metric = tf_metrics.EnvironmentSteps()
@@ -353,12 +368,16 @@ def train_eval(
         else:
             adversary_env = agents['adversary_env']
 
+        env_curriculum = EnvCurriculum(FLAGS.root_dir)
+
         collect_driver = adversarial_driver.AdversarialDriver(
             tf_env,
             agents['agent'],
             adversary_agent,
             adversary_env,
+            custom_env_list=orig_env_list,
             root_dir=FLAGS.root_dir,
+            env_curriculum=env_curriculum,
             env_metrics=env_train_metrics,
             collect=True,
             disable_tf_function=True,  # TODO(natashajaques): enable tf functions
@@ -370,7 +389,9 @@ def train_eval(
             agents['agent'],
             adversary_agent,
             adversary_env,
+            custom_env_list=orig_env_list,
             root_dir=FLAGS.root_dir,
+            env_curriculum=env_curriculum,
             env_metrics=env_eval_metrics,
             collect=False,
             disable_tf_function=True,  # TODO(natashajaques): enable tf functions
@@ -605,8 +626,10 @@ def train_eval_search_based(
     summarize_grads_and_vars=True,
     eval_metrics_callback=None,
         debug=True):
+
     """Adversarial environment train and eval."""
     tf.compat.v1.enable_v2_behavior()
+
 
     if combined_population:
         # The number of train steps per environment episodes differs based on the
@@ -620,11 +643,12 @@ def train_eval_search_based(
         raise AttributeError('train_eval requires a root_dir.')
 
     gym_env = adversarial_env.load(env_name)
-
+    
     # Set up logging
     root_dir = os.path.expanduser(root_dir)
     train_dir = os.path.join(root_dir, 'train')
     eval_dir = os.path.join(root_dir, 'eval')
+    env_curriculum = EnvCurriculum(FLAGS.root_dir)
 
     train_summary_writer = tf.compat.v2.summary.create_file_writer(
         train_dir, flush_millis=summaries_flush_secs * 1000)
@@ -645,9 +669,14 @@ def train_eval_search_based(
         eval_tf_env = adversarial_env.AdversarialTFPyEnvironment(
             adversarial_env_parallel.AdversarialParallelPyEnvironment(
                 [lambda: adversarial_env.load(env_name)] * num_eval_episodes))
+            
         tf_env = adversarial_env.AdversarialTFPyEnvironment(
             adversarial_env_parallel.AdversarialParallelPyEnvironment(
                 [lambda: adversarial_env.load(env_name)] * num_parallel_envs))
+
+        num_envs = 50
+        orig_env_list = [adversarial_env.AdversarialTFPyEnvironment(adversarial_env_parallel.AdversarialParallelPyEnvironment(
+        [lambda: adversarial_env.load(env_name)] * 1)) for i in range(num_envs)]
 
         logging.info('Preparing to train...')
         environment_steps_metric = tf_metrics.EnvironmentSteps()
@@ -680,12 +709,7 @@ def train_eval_search_based(
 
         # Create (populations of) both agents that learn to navigate the environment
         agents = {}
-        for agent_name in ['agent', 'adversary_agent']:
-            if (agent_name == 'adversary_agent' and
-                (domain_randomization or unconstrained_adversary or
-                 combined_population)):
-                # Antagonist agent not needed for baselines
-                continue
+        for agent_name in ['agent']:
 
             max_steps = gym_env.max_steps
             if protagonist_episode_length is not None and agent_name == 'agent':
@@ -693,8 +717,6 @@ def train_eval_search_based(
 
             if agent_name == 'agent':
                 population_size = protagonist_population_size
-            else:
-                population_size = antagonist_population_size
 
             agents[agent_name] = []
             for i in range(population_size):
@@ -730,16 +752,17 @@ def train_eval_search_based(
                     summarize_grads_and_vars=summarize_grads_and_vars))
 
         logging.info('Creating adversarial drivers')
-        adversary_agent = agents['adversary_agent']
 
         adversary_env = None
+        adversary_agent = None
         collect_driver = adversarial_driver.AdversarialDriver(
             tf_env,
             agents['agent'],
             adversary_agent,
             adversary_env,
+            custom_env_list=orig_env_list,
             root_dir=FLAGS.root_dir,
-
+            env_curriculum=env_curriculum,
             env_metrics=env_train_metrics,
             collect=True,
             disable_tf_function=True,  # TODO(natashajaques): enable tf functions
@@ -751,7 +774,9 @@ def train_eval_search_based(
             agents['agent'],
             adversary_agent,
             adversary_env,
+            custom_env_list=orig_env_list,
             root_dir=FLAGS.root_dir,
+            env_curriculum=env_curriculum,
             env_metrics=env_eval_metrics,
             collect=False,
             disable_tf_function=True,  # TODO(natashajaques): enable tf functions
@@ -797,19 +822,14 @@ def train_eval_search_based(
                 if debug:
                     logging.info('END EVAL ===========================')
                 # Used to interleave randomized episodes with adversarial training
-            random_episodes = False
-            if percent_random_episodes > 0:
-                chance_random = random.random()
-                if chance_random < percent_random_episodes:
-                    random_episodes = True
-                    if debug:
-                        logging.info('RANDOM EPISODE')
 
+            random_episodes =- False
             # Collect data
             if debug:
                 logging.info('Collecting at step %d', global_step_val)
             start_time = time.time()
             train_idxs = collect_driver.run(random_episodes=random_episodes, search_based=True)
+            print("!!!!!!!!!!!!", train_idxs)
             collect_time += time.time() - start_time
             if debug:
                 logging.info('Trained agents: %s', ', '.join(train_idxs))
@@ -958,30 +978,56 @@ def main(_):
 
     
     custom_printer("init -------------------")
+    mode = os.environ["mode"]
 
     logging.set_verbosity(logging.INFO)
-    train_eval(
-        FLAGS.root_dir,
-        env_name=FLAGS.env_name,
-        agents_learn_with_regret=not FLAGS.agent_regret_off,
-        unconstrained_adversary=FLAGS.unconstrained_adversary,
-        domain_randomization=FLAGS.domain_randomization,
-        percent_random_episodes=FLAGS.percent_random_episodes,
-        adversary_env_rnn=not FLAGS.no_adversary_rnn,
-        protagonist_episode_length=FLAGS.protagonist_episode_length,
-        flexible_protagonist=FLAGS.flexible_protagonist,
-        adversary_population_size=FLAGS.adversary_population_size,
-        protagonist_population_size=FLAGS.protagonist_population_size,
-        antagonist_population_size=FLAGS.antagonist_population_size,
-        combined_population=FLAGS.combined_population,
-        block_budget_weight=FLAGS.block_budget_weight,
-        num_train_steps=FLAGS.num_train_steps,
-        collect_episodes_per_iteration=FLAGS.collect_episodes_per_iteration,
-        num_parallel_envs=FLAGS.num_parallel_envs,
-        replay_buffer_capacity=FLAGS.replay_buffer_capacity,
-        num_epochs=FLAGS.num_epochs,
-        num_eval_episodes=FLAGS.num_eval_episodes,
-        debug=FLAGS.debug)
+    if mode != "search":
+        train_eval(
+            FLAGS.root_dir,
+            env_name=FLAGS.env_name,
+            agents_learn_with_regret=not FLAGS.agent_regret_off,
+            unconstrained_adversary=FLAGS.unconstrained_adversary,
+            domain_randomization=FLAGS.domain_randomization,
+            percent_random_episodes=FLAGS.percent_random_episodes,
+            adversary_env_rnn=not FLAGS.no_adversary_rnn,
+            protagonist_episode_length=FLAGS.protagonist_episode_length,
+            flexible_protagonist=FLAGS.flexible_protagonist,
+            adversary_population_size=FLAGS.adversary_population_size,
+            protagonist_population_size=FLAGS.protagonist_population_size,
+            antagonist_population_size=FLAGS.antagonist_population_size,
+            combined_population=FLAGS.combined_population,
+            block_budget_weight=FLAGS.block_budget_weight,
+            num_train_steps=FLAGS.num_train_steps,
+            collect_episodes_per_iteration=FLAGS.collect_episodes_per_iteration,
+            num_parallel_envs=FLAGS.num_parallel_envs,
+            replay_buffer_capacity=FLAGS.replay_buffer_capacity,
+            num_epochs=FLAGS.num_epochs,
+            num_eval_episodes=FLAGS.num_eval_episodes,
+            debug=FLAGS.debug)
+
+    elif mode == "search":
+        train_eval_search_based(
+            FLAGS.root_dir,
+            env_name=FLAGS.env_name,
+            agents_learn_with_regret=not FLAGS.agent_regret_off,
+            unconstrained_adversary=FLAGS.unconstrained_adversary,
+            domain_randomization=FLAGS.domain_randomization,
+            percent_random_episodes=FLAGS.percent_random_episodes,
+            adversary_env_rnn=not FLAGS.no_adversary_rnn,
+            protagonist_episode_length=FLAGS.protagonist_episode_length,
+            flexible_protagonist=FLAGS.flexible_protagonist,
+            adversary_population_size=FLAGS.adversary_population_size,
+            protagonist_population_size=FLAGS.protagonist_population_size,
+            antagonist_population_size=FLAGS.antagonist_population_size,
+            combined_population=FLAGS.combined_population,
+            block_budget_weight=FLAGS.block_budget_weight,
+            num_train_steps=FLAGS.num_train_steps,
+            collect_episodes_per_iteration=FLAGS.collect_episodes_per_iteration,
+            num_parallel_envs=FLAGS.num_parallel_envs,
+            replay_buffer_capacity=FLAGS.replay_buffer_capacity,
+            num_epochs=FLAGS.num_epochs,
+            num_eval_episodes=FLAGS.num_eval_episodes,
+            debug=FLAGS.debug)
 
 
 if __name__ == '__main__':
