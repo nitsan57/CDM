@@ -106,7 +106,7 @@ class AdversarialDriver(object):
         """Runs 3 policies in same environment: environment, agent 1, agent 2."""
         if search_based:
             agent_r_max, train_idxs = self.adversarial_episode_search()  # self.adversarial_episode()
-        if random_episodes:
+        elif random_episodes:
             # Generates a random environment for both protagonist and antagonist
             # to play.
             agent_r_max, train_idxs = self.randomized_episode()
@@ -139,6 +139,7 @@ class AdversarialDriver(object):
 
 
         train_idxs = {}
+        env_idx = 0
         if self.collect:
             
             agent_idx = np.random.choice(len(self.agent))
@@ -152,7 +153,12 @@ class AdversarialDriver(object):
             trajectories_list = []
 
             env_idx = self.env_curriculum.create_env_greedy(orig_env_list, policy, policy_state)
+
+            self.env = orig_env_list[env_idx]
             train_idxs = {}
+            # import matplotlib.pyplot as plt
+            # plt.imshow(self.env._envs[-1].render())
+            # plt.show()
             custom_printer(f"ENVIRONEMNT NUMBER: {self.total_episodes_collected}")
             ########################################################
             # DEBUG ENV
@@ -600,6 +606,11 @@ class AdversarialDriver(object):
 
         time_step = reset_func()
         policy_state = policy.get_initial_state(env.batch_size)
+        # print("IN RUN AGENT:!!")
+        # import matplotlib.pyplot as plt
+        # plt.imshow(self.env._envs[-1].render())
+        # plt.show()
+        
 
         num_steps = tf.constant(0.0)
         num_episodes = tf.zeros_like(time_step.reward)

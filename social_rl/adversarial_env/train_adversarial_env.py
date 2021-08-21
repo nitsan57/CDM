@@ -823,13 +823,12 @@ def train_eval_search_based(
                     logging.info('END EVAL ===========================')
                 # Used to interleave randomized episodes with adversarial training
 
-            random_episodes =- False
+            random_episodes = False
             # Collect data
             if debug:
                 logging.info('Collecting at step %d', global_step_val)
             start_time = time.time()
             train_idxs = collect_driver.run(random_episodes=random_episodes, search_based=True)
-            print("!!!!!!!!!!!!", train_idxs)
             collect_time += time.time() - start_time
             if debug:
                 logging.info('Trained agents: %s', ', '.join(train_idxs))

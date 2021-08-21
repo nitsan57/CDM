@@ -132,6 +132,7 @@ class EnvCurriculum(object):
         max_var_bound = (adversary_action_dim**2) / 4
         all_params_vectors = []
         for i,env in enumerate(env_list):
+            env.reset()
             changed_params = 0
             current_param_vector = np.copy(self.params_vector)
             while changed_params < self.curr_d_param:
@@ -159,7 +160,7 @@ class EnvCurriculum(object):
         if (curr_step_variance / max_var_bound) < 0.2 and self.curr_d_param < (adversary_action_dim*max_length // 2):
             #increase parameter change by 1 if variance too small
             self.curr_d_param +=1
-        self.params_vector = all_params_vectors[idx]              
+        self.params_vector = all_params_vectors[idx]       
 
 
         f_name = self.f_name
@@ -168,3 +169,6 @@ class EnvCurriculum(object):
             search_parmas['vector'] = self.params_vector
             search_parmas['d_param'] = self.curr_d_param
             pickle.dump(search_parmas, handle)
+
+
+        return idx
