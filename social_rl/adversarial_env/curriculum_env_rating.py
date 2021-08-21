@@ -167,4 +167,4 @@ class EnvCurriculum(object):
         with open(f_name, 'wb') as handle:
             search_parmas['vector'] = self.params_vector
             search_parmas['d_param'] = self.curr_d_param
-            pickle.dump(self.search_parmas, handle)
+            pickle.dump(search_parmas, handle)
