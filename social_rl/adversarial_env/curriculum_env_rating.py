@@ -30,7 +30,8 @@ class EnvCurriculum(object):
                     search_parmas = pickle.load(handle)
                     self.params_vector = search_parmas['vector']
                     self.curr_d_param = search_parmas['d_param']
-            
+            else:
+                print("SEARCH FILE DOESNT EXISTS!!!!")
 
     def eval_env_entropy(self, env, policy, policy_state):
         # TODO: CALC ~10% of num states

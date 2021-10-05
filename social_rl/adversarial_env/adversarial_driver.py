@@ -225,10 +225,10 @@ class AdversarialDriver(object):
         ###NEW LOGIC###
         # create some env copies
         train_idxs = {}
-        custom_printer(f"ENVIRONEMNT NUMBER: {self.total_episodes_collected}")
 
         # env_curriculum = EnvCurriculum(self.root_dir)
         if self.collect:
+            custom_printer(f"ENVIRONEMNT NUMBER: {self.total_episodes_collected}")
             orig_env_list = self.custom_env_list
             filled_base_env_list = []
             trajectories_list = []

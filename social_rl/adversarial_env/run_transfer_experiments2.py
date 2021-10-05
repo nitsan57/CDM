@@ -56,6 +56,10 @@ import matplotlib.pyplot as plt
 from tensorflow.compat.v1 import ConfigProto
 from tensorflow.compat.v1 import InteractiveSession
 
+gpu_devices = tf.config.experimental.list_physical_devices('GPU')
+for device in gpu_devices:
+    tf.config.experimental.set_memory_growth(device, True)
+
 config = ConfigProto()
 config.gpu_options.allow_growth = True
 session = InteractiveSession(config=config)
@@ -66,10 +70,10 @@ from plotly.subplots import make_subplots
 
 
 
-flags.DEFINE_string(
-    'root_dir', None,
-    'Directory where videos and transfer results will be saved')
-flags.mark_flag_as_required('root_dir')
+# flags.DEFINE_string(
+#     'root_dir', None,
+#     'Directory where videos and transfer results will be saved')
+#flags.mark_flag_as_required('root_dir')
 
 FLAGS = flags.FLAGS
 
@@ -235,7 +239,7 @@ def compare_all_envs_train_rewards(all_env_names):
     agent_names = ['original', 'entropy', 'history']
     policies = {}
     for a_n in agent_names:
-        path = f"/home/nitsan/Downloads/saved_policies/{a_n}_policy_latest"
+        path = f"/home/nitsan57/Downloads/saved_policies/{a_n}_policy_latest"
         policy = tf.compat.v2.saved_model.load(path)
         policies[a_n] = policy
 
@@ -282,7 +286,7 @@ def compare_final_weights_avg_reward(all_env_names, agent_names = ['original', '
 
     policies = {}
     for a_n in agent_names:
-        path = f"/home/nitsan/Downloads/saved_policies/{a_n}_policy_latest"
+        path = f"/home/nitsan57/Downloads/saved_policies/{a_n}_policy_latest"
         policy = tf.compat.v2.saved_model.load(path)
         policies[a_n] = policy
 
@@ -299,7 +303,7 @@ def compare_final_weights_avg_reward(all_env_names, agent_names = ['original', '
     titles = [env.replace("MultiGrid-", "").replace("Minigrid-", "") for env in ALL_ENVS]
 
     color10_16 = ['blue', 'cyan', 'red', "yellow",  "green",  "orange"]
-    fig = make_subplots(rows=1, cols=len(all_env_names), subplot_titles=titles)
+    fig = make_subplots(rows=(len(all_env_names)//4+1), cols=len(all_env_names), subplot_titles=titles)
     for i,env_name in enumerate(all_env_names):
         fig.add_trace(
             go.Bar(x=[agent_name for agent_name in policies], y=[all_rewards[env_name][agent_name] for agent_name in policies],name=env_name,marker_color=color10_16),row=((i//4)+1), col=((i%4)+1))
@@ -333,35 +337,37 @@ def run_experiments_on_env_curriculum_avg_reward(policy, env_name, num__iters=5,
 
 
 def compare_curriculum_weights_avg_reward(all_env_names, agent_names= ['original', 'entropy', 'history']):
-    path = "/home/nitsan/Downloads/saved_policies/"
+    path = "/home/nitsan57/Downloads/saved_policies/"
     
     
-    all_rewards = {a_n:[] for a_n in agent_names}
-    x_axis = {a_n:[]  for a_n in agent_names}
+    all_rewards = {a_n:{e_n: [] for e_n in all_env_names} for a_n in agent_names}
+    x_axis = {a_n:{e_n: [] for e_n in all_env_names} for a_n in agent_names}
     for a_n in agent_names:
         agent_weight_dirs = [ os.path.join(path, name) for name in os.listdir(path) if (os.path.isdir(os.path.join(path, name)) and a_n in name) ]
         agent_weight_dirs = np.sort(agent_weight_dirs)
-        print(agent_weight_dirs)
         for env_name in all_env_names:
             for a_w in agent_weight_dirs:
                 policy = tf.compat.v2.saved_model.load(a_w)
                 policy_iter = a_w.split("_")[-1]
-                x_axis[a_n].append(policy_iter)
+                if policy_iter == 'latest':
+                    policy_iter = '5000000'
+                x_axis[a_n][env_name].append(policy_iter)
                 full_name = a_n + "_" + policy_iter
                 avg_reward = run_experiments_on_env_curriculum_avg_reward(policy, env_name)
-                all_rewards[a_n].append(avg_reward)
+                all_rewards[a_n][env_name].append(avg_reward)
     
 
     color10_16 = ['blue', 'cyan', 'red', "yellow",  "green",  "orange"]
     fig = make_subplots(rows=len(agent_names), cols=len(all_env_names), subplot_titles=all_env_names)
+    
     for i,env_name in enumerate(all_env_names):
         for j,agent_name in enumerate(agent_names):
+            # print("!!!!", len(x_axis[agent_name])), len(all_rewards[agent_name])
             fig.add_trace(
-                go.Line(x=x_axis[agent_name], y=all_rewards[agent_name],name=agent_name,marker_color=color10_16),row=(j+1), col=(i+1))
+                go.Line(x=x_axis[agent_name][env_name], y=all_rewards[agent_name][env_name],name=agent_name,marker_color=color10_16),row=(j+1), col=(i+1))
 
 
     fig.update_layout(height=600, width=1600, title_text="Reward Comparation")
-
     fig.show()
 
 
@@ -370,8 +376,8 @@ def compare_curriculum_weights_avg_reward(all_env_names, agent_names= ['original
 
 
 def main(_):
-    compare_curriculum_weights_avg_reward([ALL_ENVS[1]], agent_names = ['original', 'entropy'])
-    compare_final_weights_avg_reward(ALL_ENVS, agent_names = ['original', 'entropy'])
+    compare_curriculum_weights_avg_reward(ALL_ENVS[:6], agent_names = ['original', 'entropy', 'search'])
+    # compare_final_weights_avg_reward(ALL_ENVS[:3], agent_names = ['original', 'entropy', 'search'])
 
     # compare_train_rewards()
     # for env_name in ALL_ENVS:

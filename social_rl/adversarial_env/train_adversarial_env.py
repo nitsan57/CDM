@@ -114,10 +114,14 @@ flags.DEFINE_boolean('combined_population', False,
                      'score for a given round.')
 flags.DEFINE_float('block_budget_weight', 0.,
                    'Coefficient used to impose block budget on the adversary.')
-flags.DEFINE_string('redirect', "False",
+flags.DEFINE_string('redirect', "default_log.log",
                     'redirect_prints_to_file')
 flags.DEFINE_string('dir', "temp",
                     'save_debug_results')
+
+# flags.DEFINE_string('mode', "original",
+                    # 'save_debug_results')
+
 FLAGS = flags.FLAGS
 
 # Loss value that is considered too high and training will be terminated.
@@ -951,20 +955,22 @@ def train_eval_search_based(
 def main(_):
     os.environ["redirect"] = FLAGS.redirect
     os.environ["debug_dir"] = FLAGS.dir
+    # os.environ["mode"] = FLAGS.mode
     try:
         os.makedirs(FLAGS.root_dir)
     except:
         pass
     f_name = os.path.join(FLAGS.root_dir,"context.pickle")
     if os.path.exists(f_name):
+        
         with open(f_name, 'rb') as handle:
             all_environs = pickle.load(handle)
             for e,v in all_environs.items():
                 os.environ[e] = v
+        print("LOADED CONFIG FILE: WITH CFG:", all_environs)
 
     else:
-
-        mode = os.environ["mode"]
+        # mode = os.environ["mode"]
         red = os.environ["redirect"]
         d_dir = os.environ["debug_dir"]
         all_environs = {}       
