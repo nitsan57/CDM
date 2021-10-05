@@ -1,6 +1,5 @@
 from operator import le
 import numpy as np
-from numpy.core.arrayprint import printoptions
 from scipy.stats import entropy
 from social_rl.custom_printer import custom_printer
 import os
@@ -31,12 +30,12 @@ class EnvCurriculum(object):
                     self.params_vector = search_parmas['vector']
                     self.curr_d_param = search_parmas['d_param']
             else:
-                print("SEARCH FILE DOESNT EXISTS!!!!")
+                custom_printer("SEARCH FILE DOESNT EXISTS!!!!")
 
     def eval_env_entropy(self, env, policy, policy_state):
         # TODO: CALC ~10% of num states
         # entropy(p, base=4) #p = prob vector
-        num_to_sample = 15
+        num_to_sample = 25
         total_agnet_entropy = 0
         for i in range(num_to_sample):
             # TODO: FIND OUT MULTIPLE ENVS ISSUES

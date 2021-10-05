@@ -68,7 +68,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-
+PATH = f"/home/nitsan57/Downloads/saved_policies/"
 
 # flags.DEFINE_string(
 #     'root_dir', None,
@@ -239,7 +239,7 @@ def compare_all_envs_train_rewards(all_env_names):
     agent_names = ['original', 'entropy', 'history']
     policies = {}
     for a_n in agent_names:
-        path = f"/home/nitsan57/Downloads/saved_policies/{a_n}_policy_latest"
+        path = PATH + f"{a_n}_policy_latest"
         policy = tf.compat.v2.saved_model.load(path)
         policies[a_n] = policy
 
@@ -286,7 +286,7 @@ def compare_final_weights_avg_reward(all_env_names, agent_names = ['original', '
 
     policies = {}
     for a_n in agent_names:
-        path = f"/home/nitsan57/Downloads/saved_policies/{a_n}_policy_latest"
+        path = PATH + f"{a_n}_policy_latest"
         policy = tf.compat.v2.saved_model.load(path)
         policies[a_n] = policy
 
@@ -316,6 +316,8 @@ def compare_final_weights_avg_reward(all_env_names, agent_names = ['original', '
     x=1
 ))
     fig.show()
+    fig.write_html('final_reward.html')
+
 
 
 def run_experiments_on_env_curriculum_avg_reward(policy, env_name, num__iters=5, display_vid=False):
@@ -336,8 +338,8 @@ def run_experiments_on_env_curriculum_avg_reward(policy, env_name, num__iters=5,
 
 
 
-def compare_curriculum_weights_avg_reward(all_env_names, agent_names= ['original', 'entropy', 'history']):
-    path = "/home/nitsan57/Downloads/saved_policies/"
+def compare_curriculum_weights_avg_reward(all_env_names, agent_names= ['original', 'entropy', 'history'], avg_only=False):
+    path = PATH 
     
     
     all_rewards = {a_n:{e_n: [] for e_n in all_env_names} for a_n in agent_names}
@@ -357,18 +359,44 @@ def compare_curriculum_weights_avg_reward(all_env_names, agent_names= ['original
                 all_rewards[a_n][env_name].append(avg_reward)
     
 
-    color10_16 = ['blue', 'cyan', 'red', "yellow",  "green",  "orange"]
-    fig = make_subplots(rows=len(agent_names), cols=len(all_env_names), subplot_titles=all_env_names)
+
+    if avg_only:
+        fig = make_subplots(rows=len(agent_names), cols=1, subplot_titles=agent_names)
+        for i,a_n in enumerate(agent_names):
+            envs_dict = all_rewards[a_n]
+            envs_curriculum_vals = pd.DataFrame(envs_dict).values
+            avg_reward_graph = np.average(envs_curriculum_vals, axis=1)
+
     
-    for i,env_name in enumerate(all_env_names):
-        for j,agent_name in enumerate(agent_names):
-            # print("!!!!", len(x_axis[agent_name])), len(all_rewards[agent_name])
+        # for j,agent_name in enumerate(agent_names):
+        # print("!!!!", len(x_axis[agent_name])), len(all_rewards[agent_name])
             fig.add_trace(
-                go.Line(x=x_axis[agent_name][env_name], y=all_rewards[agent_name][env_name],name=agent_name,marker_color=color10_16),row=(j+1), col=(i+1))
+                go.Line(x=x_axis[a_n][all_env_names[-1]], y=avg_reward_graph ,name=a_n),row=(i+1), col=(1))
 
 
-    fig.update_layout(height=600, width=1600, title_text="Reward Comparation")
-    fig.show()
+        fig.update_layout(height=600, width=1600, title_text="Reward Comparation")
+        fig.show()
+        fig.write_html('avg_curriculum_reward.html')
+
+
+
+
+
+    else:
+        color10_16 = ['blue', 'cyan', 'red', "yellow",  "green",  "orange"]
+        fig = make_subplots(rows=len(agent_names), cols=len(all_env_names), subplot_titles=all_env_names)
+    
+        for i,env_name in enumerate(all_env_names):
+            for j,agent_name in enumerate(agent_names):
+            # print("!!!!", len(x_axis[agent_name])), len(all_rewards[agent_name])
+                fig.add_trace(
+                    go.Line(x=x_axis[agent_name][env_name], y=all_rewards[agent_name][env_name],name=agent_name,marker_color=color10_16),row=(j+1), col=(i+1))
+
+
+        fig.update_layout(height=600, width=1600, title_text="Reward Comparation")
+        fig.show()
+        fig.write_html('all_env_curriculum_reward.html')
+    return all_rewards
 
 
 
@@ -376,8 +404,16 @@ def compare_curriculum_weights_avg_reward(all_env_names, agent_names= ['original
 
 
 def main(_):
-    compare_curriculum_weights_avg_reward(ALL_ENVS[:6], agent_names = ['original', 'entropy', 'search'])
-    # compare_final_weights_avg_reward(ALL_ENVS[:3], agent_names = ['original', 'entropy', 'search'])
+    agent_names = ['original', 'entropy', 'search']
+    compare_curriculum_weights_avg_reward(ALL_ENVS[:2], agent_names = agent_names, avg_only=True)
+    # compare_final_weights_avg_reward(ALL_ENVS[:3], agent_names = agent_names)
+
+
+    # for a_n in agent_names:
+    #     envs_dict = all_rewards_curriculum[a_n]
+    #     envs_curriculum_vals = pd.DataFrame(envs_dict).values
+    #     avg_reward_graph = np.average(envs_curriculum_vals, axis=0)
+
 
     # compare_train_rewards()
     # for env_name in ALL_ENVS:

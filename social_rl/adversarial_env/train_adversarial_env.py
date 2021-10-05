@@ -513,9 +513,9 @@ def train_eval(
 
             # Print output logging statements
             if global_step_val % log_interval == 0:
-                for name, agent_list in agents.items():
-                    for i, agent in enumerate(agent_list):
-                        print('Loss for', name, i, '=', agent.total_loss)
+                # for name, agent_list in agents.items():
+                    # for i, agent in enumerate(agent_list):
+                        # print('Loss for', name, i, '=', agent.total_loss)
                 steps_per_sec = (
                     (global_step_val - timed_at_step) / (collect_time + train_time))
                 logging.info('%.3f steps/sec', steps_per_sec)
@@ -891,9 +891,9 @@ def train_eval_search_based(
 
             # Print output logging statements
             if global_step_val % log_interval == 0:
-                for name, agent_list in agents.items():
-                    for i, agent in enumerate(agent_list):
-                        print('Loss for', name, i, '=', agent.total_loss)
+                # for name, agent_list in agents.items():
+                #     for i, agent in enumerate(agent_list):
+                #         print('Loss for', name, i, '=', agent.total_loss)
                 steps_per_sec = (
                     (global_step_val - timed_at_step) / (collect_time + train_time))
                 logging.info('%.3f steps/sec', steps_per_sec)
@@ -967,14 +967,13 @@ def main(_):
             all_environs = pickle.load(handle)
             for e,v in all_environs.items():
                 os.environ[e] = v
-        print("LOADED CONFIG FILE: WITH CFG:", all_environs)
+        custom_printer("LOADED CONFIG FILE: WITH CFG:", all_environs)
 
     else:
         # mode = os.environ["mode"]
         red = os.environ["redirect"]
         d_dir = os.environ["debug_dir"]
         all_environs = {}       
-        all_environs["mode"] = mode
         all_environs["redirect"] = red
         all_environs["debug_dir"] = d_dir
         with open(f_name, 'wb') as handle:
