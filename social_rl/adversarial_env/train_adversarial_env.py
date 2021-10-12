@@ -967,7 +967,7 @@ def main(_):
             all_environs = pickle.load(handle)
             for e,v in all_environs.items():
                 os.environ[e] = v
-        custom_printer("LOADED CONFIG FILE: WITH CFG:", all_environs)
+        custom_printer(f"LOADED CONFIG FILE: WITH CFG:{ all_environs}")
 
     else:
         # mode = os.environ["mode"]
