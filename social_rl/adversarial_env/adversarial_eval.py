@@ -107,23 +107,23 @@ def eager_compute(driver,
         metric.reset()
 
     train_idxs = driver.run()
-
     results = []
-    for name, agent_list in agents.items():
-        # Train the agent selected by the driver this training run
-        for agent_idx in train_idxs[name]:
-            agent = agent_list[agent_idx]
-            if agent.is_environment:
-                agent_metrics = agent.eval_metrics + [agent.env_eval_metric]
-            else:
-                agent_metrics = agent.eval_metrics
-            results.extend(
-                [(metric.name, metric.result()) for metric in agent_metrics])
+    if len(train_idxs) != 0:
+        for name, agent_list in agents.items():
+            # Train the agent selected by the driver this training run
+            for agent_idx in train_idxs[name]:
+                agent = agent_list[agent_idx]
+                if agent.is_environment:
+                    agent_metrics = agent.eval_metrics + [agent.env_eval_metric]
+                else:
+                    agent_metrics = agent.eval_metrics
+                results.extend(
+                    [(metric.name, metric.result()) for metric in agent_metrics])
 
-        record_metrics(agent_metrics, train_step, summary_writer, summary_prefix)
+            record_metrics(agent_metrics, train_step, summary_writer, summary_prefix)
 
-    results.extend([(metric.name, metric.result()) for metric in env_metrics])
-    record_metrics(env_metrics, train_step, summary_writer, summary_prefix)
+        results.extend([(metric.name, metric.result()) for metric in env_metrics])
+        record_metrics(env_metrics, train_step, summary_writer, summary_prefix)
 
     # TODO(b/130249101): Add an option to log metrics.
     return collections.OrderedDict(results)

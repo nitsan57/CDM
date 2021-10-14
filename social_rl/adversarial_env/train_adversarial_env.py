@@ -118,9 +118,8 @@ flags.DEFINE_string('redirect', "default_log.log",
                     'redirect_prints_to_file')
 flags.DEFINE_string('dir', "temp",
                     'save_debug_results')
-
-# flags.DEFINE_string('mode', "original",
-                    # 'save_debug_results')
+flags.DEFINE_string('mode', "original",
+                    'chose training mode')
 
 FLAGS = flags.FLAGS
 
@@ -136,6 +135,7 @@ TERMINATE_AFTER_DIVERGED_STEPS = 100
 def train_eval(
     root_dir,
     env_name='MultiGrid-Adversarial-v0',
+    mode = 'original',
     random_seed=None,
     # PAIRED parameters
     agents_learn_with_regret=True,
@@ -372,7 +372,7 @@ def train_eval(
         else:
             adversary_env = agents['adversary_env']
 
-        env_curriculum = EnvCurriculum(FLAGS.root_dir)
+        env_curriculum = EnvCurriculum(FLAGS.root_dir, mode)
 
         collect_driver = adversarial_driver.AdversarialDriver(
             tf_env,
@@ -381,6 +381,7 @@ def train_eval(
             adversary_env,
             custom_env_list=orig_env_list,
             root_dir=FLAGS.root_dir,
+            mode=mode,
             env_curriculum=env_curriculum,
             env_metrics=env_train_metrics,
             collect=True,
@@ -395,6 +396,7 @@ def train_eval(
             adversary_env,
             custom_env_list=orig_env_list,
             root_dir=FLAGS.root_dir,
+            mode=mode,
             env_curriculum=env_curriculum,
             env_metrics=env_eval_metrics,
             collect=False,
@@ -453,6 +455,7 @@ def train_eval(
             if debug:
                 logging.info('Collecting at step %d', global_step_val)
             start_time = time.time()
+
             train_idxs = collect_driver.run(random_episodes=random_episodes)
             collect_time += time.time() - start_time
             if debug:
@@ -525,21 +528,21 @@ def train_eval(
                     tf.compat.v2.summary.scalar(
                         name='global_steps_per_sec', data=steps_per_sec, step=global_step)
 
-                # Save checkpoints for all agent types and population members
-                if global_step_val % train_checkpoint_interval == 0:
-                    for name, agent_list in agents.items():
-                        for i, agent in enumerate(agent_list):
-                            if debug:
-                                logging.info('Saving checkpoint for agent %s %d', name, i)
-                            agent.train_checkpointer.save(global_step=global_step_val)
-                if global_step_val % policy_checkpoint_interval == 0:
-                    for name, agent_list in agents.items():
-                        for i, agent in enumerate(agent_list):
-                            agent.policy_checkpointer.save(global_step=global_step_val)
-                            saved_model_path = os.path.join(
-                                agent.saved_model_dir,
-                                'policy_' + ('%d' % global_step_val).zfill(9))
-                            agent.saved_model.save(saved_model_path)
+            # Save checkpoints for all agent types and population members
+            if global_step_val % train_checkpoint_interval == 0:
+                for name, agent_list in agents.items():
+                    for i, agent in enumerate(agent_list):
+                        if debug:
+                            logging.info('Saving checkpoint for agent %s %d', name, i)
+                        agent.train_checkpointer.save(global_step=global_step_val)
+            if global_step_val % policy_checkpoint_interval == 0:
+                for name, agent_list in agents.items():
+                    for i, agent in enumerate(agent_list):
+                        agent.policy_checkpointer.save(global_step=global_step_val)
+                        saved_model_path = os.path.join(
+                            agent.saved_model_dir,
+                            'policy_' + ('%d' % global_step_val).zfill(9))
+                        agent.saved_model.save(saved_model_path)
 
                 timed_at_step = global_step_val
                 collect_time = 0
@@ -577,6 +580,7 @@ def train_eval(
 def train_eval_search_based(
     root_dir,
     env_name='MultiGrid-Adversarial-v0',
+    mode = 'search',
     random_seed=None,
     # PAIRED parameters
     agents_learn_with_regret=True,
@@ -652,7 +656,7 @@ def train_eval_search_based(
     root_dir = os.path.expanduser(root_dir)
     train_dir = os.path.join(root_dir, 'train')
     eval_dir = os.path.join(root_dir, 'eval')
-    env_curriculum = EnvCurriculum(FLAGS.root_dir)
+    env_curriculum = EnvCurriculum(FLAGS.root_dir, mode)
 
     train_summary_writer = tf.compat.v2.summary.create_file_writer(
         train_dir, flush_millis=summaries_flush_secs * 1000)
@@ -767,6 +771,7 @@ def train_eval_search_based(
             custom_env_list=orig_env_list,
             root_dir=FLAGS.root_dir,
             env_curriculum=env_curriculum,
+            mode='search',
             env_metrics=env_train_metrics,
             collect=True,
             disable_tf_function=True,  # TODO(natashajaques): enable tf functions
@@ -781,6 +786,7 @@ def train_eval_search_based(
             custom_env_list=orig_env_list,
             root_dir=FLAGS.root_dir,
             env_curriculum=env_curriculum,
+            mode='search',
             env_metrics=env_eval_metrics,
             collect=False,
             disable_tf_function=True,  # TODO(natashajaques): enable tf functions
@@ -832,7 +838,7 @@ def train_eval_search_based(
             if debug:
                 logging.info('Collecting at step %d', global_step_val)
             start_time = time.time()
-            train_idxs = collect_driver.run(random_episodes=random_episodes, search_based=True)
+            train_idxs = collect_driver.run(random_episodes=random_episodes)
             collect_time += time.time() - start_time
             if debug:
                 logging.info('Trained agents: %s', ', '.join(train_idxs))
@@ -955,7 +961,7 @@ def train_eval_search_based(
 def main(_):
     os.environ["redirect"] = FLAGS.redirect
     os.environ["debug_dir"] = FLAGS.dir
-    # os.environ["mode"] = FLAGS.mode
+    os.environ["mode"] = FLAGS.mode.strip()
     try:
         os.makedirs(FLAGS.root_dir)
     except:
@@ -966,16 +972,17 @@ def main(_):
         with open(f_name, 'rb') as handle:
             all_environs = pickle.load(handle)
             for e,v in all_environs.items():
-                os.environ[e] = v
+                os.environ[e] = v.strip()
         custom_printer(f"LOADED CONFIG FILE: WITH CFG:{ all_environs}")
 
     else:
-        # mode = os.environ["mode"]
+        mode = os.environ["mode"]
         red = os.environ["redirect"]
         d_dir = os.environ["debug_dir"]
         all_environs = {}       
         all_environs["redirect"] = red
         all_environs["debug_dir"] = d_dir
+        all_environs["mode"] = mode
         with open(f_name, 'wb') as handle:
             pickle.dump(all_environs, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
@@ -984,11 +991,14 @@ def main(_):
     custom_printer("init -------------------")
     mode = os.environ["mode"]
 
+    custom_printer(f"LOADED MODE:{mode}")
+
     logging.set_verbosity(logging.INFO)
     if mode != "search":
         train_eval(
             FLAGS.root_dir,
             env_name=FLAGS.env_name,
+            mode = mode,
             agents_learn_with_regret=not FLAGS.agent_regret_off,
             unconstrained_adversary=FLAGS.unconstrained_adversary,
             domain_randomization=FLAGS.domain_randomization,
@@ -1013,6 +1023,7 @@ def main(_):
         train_eval_search_based(
             FLAGS.root_dir,
             env_name=FLAGS.env_name,
+            mode = 'search',
             agents_learn_with_regret=not FLAGS.agent_regret_off,
             unconstrained_adversary=FLAGS.unconstrained_adversary,
             domain_randomization=FLAGS.domain_randomization,

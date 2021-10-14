@@ -217,8 +217,8 @@ class FrozenLakeEnv(discrete.DiscreteEnv):
         return row * self.ncol + col
 
     def decode(self, s):
-        col = s % self.num_columns
-        row = s // self.num_columns
+        col = int(s % self.num_columns)
+        row = int(s // self.num_columns)
         return row, col
 
     def after_adversarial(self):

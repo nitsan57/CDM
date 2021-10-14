@@ -8,20 +8,21 @@ import cv2
 import tensorflow as tf
 
 class EnvCurriculum(object):
-    def __init__(self, root_dir) -> None:
+    def __init__(self, root_dir, mode) -> None:
 
         self.History = dict()
         self.curr_d_param = 1 # param change rate
         self.params_vector = []
+        self.mode = mode
         
-        if os.environ["mode"] == "history":
+        if mode == "history":
             f_name = os.path.join(root_dir,"history.pickle")
             self.f_name = f_name
             if os.path.exists(f_name):
                 with open(f_name, 'rb') as handle:
                     self.History = pickle.load(handle)
 
-        if os.environ["mode"] == "search":
+        if mode == "search":
             f_name = os.path.join(root_dir,"search.pickle")
             self.f_name = f_name
             if os.path.exists(f_name):

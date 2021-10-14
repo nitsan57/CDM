@@ -117,7 +117,7 @@ class SingleTaxiEnv(discrete.DiscreteEnv):
         self.num_columns = self.size
         self.adversary_action_dim = self.num_rows * self.num_columns
         self.adversary_max_steps = self.n_clutter + 2
-        self.fully_observed = False
+        self.fully_observed = True
         self.n_agents = 1
         # INIT MAP PARAMS
         self.s = -1

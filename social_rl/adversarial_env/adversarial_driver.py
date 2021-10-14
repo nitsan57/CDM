@@ -52,6 +52,7 @@ class AdversarialDriver(object):
                  custom_env_list,
                  root_dir,
                  env_curriculum,
+                 mode='original',
                  env_metrics=None,
                  collect=True,
                  disable_tf_function=False,
@@ -88,6 +89,7 @@ class AdversarialDriver(object):
         self.debug = debug
         self.total_episodes_collected = 0
         self.root_dir = root_dir
+        self.mode = mode
 
         if not disable_tf_function:
             self.run = common.function(self.run, autograph=True)
@@ -102,9 +104,9 @@ class AdversarialDriver(object):
         self.combined_population = combined_population
         self.flexible_protagonist = flexible_protagonist
 
-    def run(self, random_episodes=False, search_based=False):
+    def run(self, random_episodes=False):
         """Runs 3 policies in same environment: environment, agent 1, agent 2."""
-        if search_based:
+        if self.mode == 'search':
             agent_r_max, train_idxs = self.adversarial_episode_search()  # self.adversarial_episode()
         elif random_episodes:
             # Generates a random environment for both protagonist and antagonist
@@ -115,16 +117,20 @@ class AdversarialDriver(object):
             if self.combined_population:
                 agent_r_max, train_idxs = self.combined_population_adversarial_episode()
             else:
-                if os.environ["mode"] == "original":
+                if self.mode == "original":
+
                     agent_r_max, train_idxs = self.adversarial_episode() 
-                else:
+                else: #ENTROPY
                     agent_r_max, train_idxs = self.adversarial_episode_heuristic() #self.adversarial_episode() 
 
         else:
             # Only one agent plays a randomly generated environment.
             agent_r_max, train_idxs = self.domain_randomization_episode()
 
-        self.total_episodes_collected += agent_r_max.shape[0]
+        try:
+            self.total_episodes_collected += agent_r_max.shape[0]
+        except:
+            self.total_episodes_collected += 1
 
         self.log_environment_metrics(agent_r_max)
 
@@ -174,7 +180,11 @@ class AdversarialDriver(object):
             ########################################################
 
         else:
-            return -1, -1
+            # Build environment with adversary.
+            # _, _, env_idx = self.run_agent(
+            #     self.env, self.adversary_env, self.env.reset, self.env.step_adversary)
+            # train_idxs = {'adversary_env': [env_idx]}
+            return -1, {}
             # Build environment
             agent_idx = np.random.choice(len(self.agent))
             agent = self.agent[agent_idx]
@@ -208,6 +218,8 @@ class AdversarialDriver(object):
             logging.info('Agent reward: avg = %f, max = %f',
                          tf.reduce_mean(agent_r_avg).numpy(),
                          tf.reduce_mean(agent_r_max).numpy())
+
+        custom_printer(f"cutrom print return of adversarial_episode_search: {agent_r_max}, {train_idxs}")
 
         return agent_r_max, train_idxs
 
@@ -248,9 +260,9 @@ class AdversarialDriver(object):
             policy = agent.collect_policy
 
             policy_state = policy.get_initial_state(self.env.batch_size)
-            if os.environ["mode"] == "entropy":
+            if self.mode == "entropy":
                 idx = self.env_curriculum.choose_best_env_idx_by_entropy(filled_base_env_list, policy, policy_state)
-            elif os.environ["mode"] == "history":
+            elif self.mode == "history":
                 idx = self.env_curriculum.choose_best_env_idx_by_history(filled_base_env_list)
             else:
                 custom_printer("HEURSITIC MODE NOT SUPPORTED!!! Will exit now..")
@@ -317,7 +329,7 @@ class AdversarialDriver(object):
         else:
             self.adversary_env[env_idx].env_eval_metric(env_reward)
         
-        if os.environ["mode"] == "history":
+        if self.mode == "history":
             self.env.reset_agent()
             env = self.totuple(cv2.cvtColor(self.env._envs[-1].render(), cv2.COLOR_BGR2GRAY))
             agent_reward = tf.reduce_mean(agent_r_avg).numpy()
