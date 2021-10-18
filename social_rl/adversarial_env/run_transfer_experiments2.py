@@ -68,7 +68,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-PATH = f"/home/nitsan57/Downloads/saved_policies/"
+PATH = "/cs/labs/jeff/nitsan57/Thesis/saved_policies/"
 
 # flags.DEFINE_string(
 #     'root_dir', None,
@@ -76,7 +76,7 @@ PATH = f"/home/nitsan57/Downloads/saved_policies/"
 #flags.mark_flag_as_required('root_dir')
 
 FLAGS = flags.FLAGS
-
+NUM_ITERS = 1
 
 VAL_ENVS = [
     'MultiGrid-TwoRooms-Minigrid-v0',
@@ -111,6 +111,12 @@ MINI_TEST_ENVS = [
 ALL_ENVS = MINI_VAL_ENVS+ VAL_ENVS + TEST_ENVS + MINI_TEST_ENVS 
 
 BLACK_LIST_ENV_IDX = defaultdict(list)
+
+def logger(msg, f_name='fig_log.log'):
+    f = open(f_name, 'a')
+    f.write(msg)
+    f.write('\n')
+    f.close()
 
 def update_black_list():
     BLACK_LIST_ENV_IDX["MultiGrid-Cluttered50-Minigrid-v0"] += [2,4, ]
@@ -192,7 +198,7 @@ def run_policy(i, env_name, policy):
 
     return run_agent(policy, py_env, tf_env)
 
-def run_experiments_on_env(policies, env_name,all_rewards, num__iters=5, display_vid=False):
+def run_experiments_on_env(policies, env_name,all_rewards, num__iters=NUM_ITERS, display_vid=False):
     exp_names = []
     all_vids = {agent_name:[] for agent_name in policies}
     for i in range(num__iters):
@@ -233,7 +239,7 @@ def run_experiments_on_env(policies, env_name,all_rewards, num__iters=5, display
 
     return exp_names, all_rewards
 
-def compare_all_envs_train_rewards(all_env_names):
+def compare_all_envs_train_rewards(all_env_names, show=False):
     env_idx = 1
 
     agent_names = ['original', 'entropy', 'history']
@@ -256,9 +262,10 @@ def compare_all_envs_train_rewards(all_env_names):
     
     df = pd.DataFrame(pd_dict)
     fig = px.line(df, x="env_names", y=y, title='Reward compare')
-    fig.show()
+    if show:
+        fig.show()
 
-def run_experiments_on_env_avg_reward(policies, env_name, all_rewards, num__iters=5, display_vid=False):
+def run_experiments_on_env_avg_reward(policies, env_name, all_rewards, num__iters=NUM_ITERS, display_vid=False):
     all_vids = {agent_name:[] for agent_name in policies}
     num_envs_trained = 0
     for i in range(num__iters):
@@ -282,7 +289,7 @@ def run_experiments_on_env_avg_reward(policies, env_name, all_rewards, num__iter
 
 
 
-def compare_final_weights_avg_reward(all_env_names, agent_names = ['original', 'entropy', 'history']):
+def compare_final_weights_avg_reward(all_env_names, agent_names = ['original', 'entropy', 'history'], show=False):
 
     policies = {}
     for a_n in agent_names:
@@ -315,12 +322,13 @@ def compare_final_weights_avg_reward(all_env_names, agent_names = ['original', '
     xanchor="right",
     x=1
 ))
-    fig.show()
+    if show:
+        fig.show()
     fig.write_html('final_reward.html')
 
 
 
-def run_experiments_on_env_curriculum_avg_reward(policy, env_name, num__iters=5, display_vid=False):
+def run_experiments_on_env_curriculum_avg_reward(policy, env_name, num__iters=NUM_ITERS, display_vid=False):
     num_envs_trained = 0
     avg_reward = 0
     for i in range(num__iters):
@@ -338,7 +346,7 @@ def run_experiments_on_env_curriculum_avg_reward(policy, env_name, num__iters=5,
 
 
 
-def compare_curriculum_weights_avg_reward(all_env_names, agent_names= ['original', 'entropy', 'history'], avg_only=False):
+def compare_curriculum_weights_avg_reward(all_env_names, agent_names= ['original', 'entropy', 'history'], avg_only=False, show=False):
     path = PATH 
     
     
@@ -357,6 +365,7 @@ def compare_curriculum_weights_avg_reward(all_env_names, agent_names= ['original
                 full_name = a_n + "_" + policy_iter
                 avg_reward = run_experiments_on_env_curriculum_avg_reward(policy, env_name)
                 all_rewards[a_n][env_name].append(avg_reward)
+                logger(f"finished agent {full_name} on {env_name} reward: {avg_reward}")
     
 
 
@@ -375,12 +384,8 @@ def compare_curriculum_weights_avg_reward(all_env_names, agent_names= ['original
 
 
         fig.update_layout(height=600, width=1600, title_text="Reward Comparation")
-        fig.show()
+        
         fig.write_html('avg_curriculum_reward.html')
-
-
-
-
 
     else:
         color10_16 = ['blue', 'cyan', 'red', "yellow",  "green",  "orange"]
@@ -394,8 +399,10 @@ def compare_curriculum_weights_avg_reward(all_env_names, agent_names= ['original
 
 
         fig.update_layout(height=600, width=1600, title_text="Reward Comparation")
-        fig.show()
         fig.write_html('all_env_curriculum_reward.html')
+
+    if show:
+        fig.show()
     return all_rewards
 
 
@@ -405,7 +412,7 @@ def compare_curriculum_weights_avg_reward(all_env_names, agent_names= ['original
 
 def main(_):
     agent_names = ['original', 'entropy', 'search']
-    compare_curriculum_weights_avg_reward(ALL_ENVS[:2], agent_names = agent_names, avg_only=True)
+    compare_curriculum_weights_avg_reward(ALL_ENVS, agent_names = agent_names, avg_only=True)
     # compare_final_weights_avg_reward(ALL_ENVS[:3], agent_names = agent_names)
 
 
