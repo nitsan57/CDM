@@ -104,7 +104,7 @@ class SingleTaxiEnv(discrete.DiscreteEnv):
         DROPOFF = DROPOFF
         REFUEL = REFUEL
 
-    def __init__(self, size=5, agent_view_size=3, max_steps=300, n_clutter=10, random_z_dim=50, n_agents=1):
+    def __init__(self, size=5, agent_view_size=3, max_steps=300, n_clutter=10, random_z_dim=50, n_agents=1, random_reset_loc=False):
         ####PARAMS FOR PAIRED####
         self.agent_view_size = agent_view_size
         self.minigrid_mode = True
@@ -140,11 +140,11 @@ class SingleTaxiEnv(discrete.DiscreteEnv):
                 low=0,
                 high=1,
                 shape=obs_image_shape,
-                dtype='uint8')
+                dtype='float32')
 
             self.fuel_space = gym.spaces.Discrete(MAX_FUEL - 1)
             # self.fuel_space = gym.spaces.Box(
-            #     low=0, high=MAX_FUEL, shape=(self.n_agents,), dtype='uint8')
+            #     low=0, high=MAX_FUEL, shape=(self.n_agents,), dtype='float32')
 
             observation_space = {'image': self.image_obs_space, 'fuel': self.fuel_space}
             self.observation_space = gym.spaces.Dict(observation_space)
@@ -158,18 +158,19 @@ class SingleTaxiEnv(discrete.DiscreteEnv):
             low=0,
             high=1,
             shape=(self.total_row_size, self.total_col_size, 3),
-            dtype='uint8')
+            dtype='float32')
 
         self.adversary_randomz_obs_space = gym.spaces.Box(low=0, high=1.0, shape=(random_z_dim,), dtype=np.float32)
 
         self.adversary_ts_obs_space = gym.spaces.Box(
-            low=0, high=self.adversary_max_steps, shape=(1,), dtype='uint8')
+            low=0, high=self.adversary_max_steps, shape=(1,), dtype='float32')
         self.adversary_observation_space = gym.spaces.Dict(
             {'image': self.adversary_image_obs_space,
              'time_step': self.adversary_ts_obs_space,
              'random_z': self.adversary_randomz_obs_space})
 
         #NORMAL INIT##
+        self.random_reset_loc = random_reset_loc
         self.max_row = self.num_rows - 1
         self.max_col = self.num_columns - 1
 
@@ -239,7 +240,7 @@ class SingleTaxiEnv(discrete.DiscreteEnv):
                                     else:  # dropoff at wrong location
                                         reward = REWARD_DICT[BAD_DROPOFF_REWARD]
                                 elif action == REFUEL:
-                                    if taxi_loc == self.fuel_station:
+                                    if taxi_loc == self.fuel_station and fuel >= MAX_FUEL -3:
                                         reward = REWARD_DICT[REFUEL_REWARD]
                                         fuel = MAX_FUEL - 1
                                     else:
@@ -367,7 +368,7 @@ class SingleTaxiEnv(discrete.DiscreteEnv):
 
     def get_map_image(self, adversarial=False):
         h, w = len(self._str_map), len(self._str_map[0])
-        rgb_map = np.zeros((h, w, 3)).astype(np.uint8)
+        rgb_map = np.zeros((h, w, 3)).astype(np.float32)
         if self.s != -1:
             taxi_row, taxi_col, pass_idx, dest_idx, fuel = self.decode(self.s)
         else:
@@ -405,7 +406,7 @@ class SingleTaxiEnv(discrete.DiscreteEnv):
                         num_objs_on_cell += 1
 
                     if num_objs_on_cell > 0:
-                        cell_color = (cell_color / num_objs_on_cell).astype(np.uint8)
+                        cell_color = (cell_color / num_objs_on_cell).astype(np.float32)
 
                 rgb_map[r_index, c_index] = cell_color
         if not self.fully_observed and not adversarial and taxi_row != -1:
@@ -416,7 +417,7 @@ class SingleTaxiEnv(discrete.DiscreteEnv):
         else:
             rgb_map = rgb_map + 50
 
-        return rgb_map
+        return rgb_map / 255
 
     def render(self, mode='human'):
         if mode == "rgb_array":
@@ -489,10 +490,13 @@ class SingleTaxiEnv(discrete.DiscreteEnv):
         self.passable = -1
         self.shortest_path_length = (self.num_columns) * (self.num_rows) + 1
 
-    def find_free_space_and_put(self, symbol):
+    def find_free_space(self):
         free_indices = [i for i in range(self.num_columns * self.num_rows) if self.get_map_symbol(self.unpack_index(i)[0], self.unpack_index(i)[1], False) == " "]
         index = np.random.choice(free_indices)
-        loc_row, loc_col = self.unpack_index(index)
+        return self.unpack_index(index)
+
+    def find_free_space_and_put(self, symbol):
+        loc_row, loc_col = self.find_free_space()
         self.put_in_map(loc_row, loc_col, symbol)
 
     def translate_from_map_to_local(self, row, col, wall_zone=False):
@@ -545,7 +549,13 @@ class SingleTaxiEnv(discrete.DiscreteEnv):
             print("Error trying to reset agent before making adversarial step")
 
         self.step_count = 0
-        self.s = self.init_s
+        s = self.init_s
+        if self.random_reset_loc:
+            loc_row, loc_col = self.find_free_space()
+            orig_init_row, orig_init_col, pass_idx, dest_idx, fuel = self.decode(s)
+            s = self.encode(loc_row, loc_col, pass_idx, dest_idx, fuel)
+
+        self.s = s
         self.last_action = None
 
         # Return first observation
@@ -608,7 +618,7 @@ class SingleTaxiEnv(discrete.DiscreteEnv):
         taxi_row, taxi_col, pass_idx, dest_idx, fuel = self.decode(self.s)
 
         if not self.fully_observed:
-            agent_image = np.zeros((self.agent_view_size * 2, self.agent_view_size * 2, 3)).astype(np.uint8)
+            agent_image = np.zeros((self.agent_view_size * 2, self.agent_view_size * 2, 3)).astype(np.float32)
             gray = np.array([78] * 3) + 50  # gray - show walls in edges
             agent_image = agent_image + gray
             row, col = self.translate_from_local_to_map(taxi_row, taxi_col)
@@ -646,11 +656,11 @@ class SingleTaxiEnv(discrete.DiscreteEnv):
         return obs
 
     def step(self, actions):
-        if type(actions) != int:
+        if type(actions) not in [np.int ,np.int32]:
             a = actions[0]
         else:
             a = actions
-        assert type(actions) == int or len(actions) == 1
+        assert type(actions) in [np.int ,np.int32] or len(actions) == 1
 
         transitions = self.P[self.s][a]
         i = discrete.categorical_sample([t[0] for t in transitions], self.np_random)  # only 0 index is chosen
