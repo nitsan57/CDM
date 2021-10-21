@@ -77,11 +77,11 @@ flags.DEFINE_integer('num_train_steps', 500000,
                      'many agents are being trained.')
 flags.DEFINE_integer('num_epochs', 25,
                      'Number of epochs for computing policy updates.')
-flags.DEFINE_integer('collect_episodes_per_iteration', 4,
+flags.DEFINE_integer('collect_episodes_per_iteration', 30, #4
                      'The number of episodes to take in the environment before '
                      'each update. This is the total across all parallel '
                      'environments.')
-flags.DEFINE_integer('num_eval_episodes', 2,
+flags.DEFINE_integer('num_eval_episodes', 1, #2
                      'The number of episodes to run eval on. Originally 30.')
 flags.DEFINE_boolean('debug', False, 'Turn on debugging and tf functions off.')
 flags.DEFINE_boolean('agent_regret_off', False,
@@ -613,7 +613,7 @@ def train_eval_search_based(
     adv_timestep_fc=10,
     adv_entropy_regularization=0.,
     # Params for collect
-    num_train_steps=500000,
+    num_train_steps=1000000,
     collect_episodes_per_iteration=30,
     num_parallel_envs=1,
     replay_buffer_capacity=1001,  # Per-environment
