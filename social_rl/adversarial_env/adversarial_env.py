@@ -49,7 +49,7 @@ from tf_agents.utils import nest_utils
 
 @gin.configurable
 def load(environment_name,
-         discount=0.99,
+         discount=0.95,
          max_episode_steps=None,
          gym_env_wrappers=(),
          env_wrappers=(),
