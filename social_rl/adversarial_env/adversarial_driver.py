@@ -637,11 +637,13 @@ class AdversarialDriver(object):
         new_w = int(new_h * ratio)
         fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
         debug_dir = os.environ['debug_dir']
-        im_dir = debug_dir + '/images/steps/'
-        if not os.path.exists(im_dir):
-            os.makedirs(im_dir)
+        vid_debug=False
+        if vid_debug and self.collect:
+            im_dir = debug_dir + '/images/steps/'
+            if not os.path.exists(im_dir):
+                os.makedirs(im_dir)
 
-        writer = cv2.VideoWriter(im_dir + str(self.total_episodes_collected) + "_" + agent.name + ".mp4", fourcc, 15, (new_w, new_h))
+            writer = cv2.VideoWriter(im_dir + str(self.total_episodes_collected) + "_" + agent.name + ".mp4", fourcc, 15, (new_w, new_h))
 
         while num_steps < agent.max_steps:
 
@@ -654,11 +656,10 @@ class AdversarialDriver(object):
                 # exit()
             next_time_step = step_func(action_step.action)
 
-            if False:  # for debug only
+            if False and self.collect:  # for debug only
                 image = next_time_step.observation['image'][0]
                 image = image.numpy().astype(np.float32)
-                # image = image / 10
-                # image = image * 255
+                
                 image = image.astype(np.uint8)
                 custom_printer(f"STEP NUMBER:{num_steps.numpy()}")
                 x = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
@@ -674,11 +675,11 @@ class AdversarialDriver(object):
                 x = cv2.resize(x, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
                 writer.write(x)
                 cv2.imwrite(debug_dir + "/real_view_" + str(int(num_steps.numpy())) + ".png", x)
-
-            x = self.env._envs[-1].render()
-            x = cv2.cvtColor(x, cv2.COLOR_RGB2BGR)
-            x = cv2.resize(x, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
-            writer.write(x)
+            if vid_debug and self.collect:
+                x = self.env._envs[-1].render()
+                x = cv2.cvtColor(x, cv2.COLOR_RGB2BGR)
+                x = cv2.resize(x, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
+                writer.write(x)
 
             # Replace with terminal timestep to manually end episode (enables
             # artificially decreasing number of steps for one of the agents).
@@ -707,8 +708,9 @@ class AdversarialDriver(object):
 
             time_step = next_time_step
             policy_state = action_step.state
-
-        writer.release()
+        
+        if vid_debug and self.collect:
+            writer.release()
 
         avg_reward = avg_reward / num_episodes
         if gen_env_mode == False:
