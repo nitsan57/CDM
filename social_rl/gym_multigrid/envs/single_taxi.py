@@ -140,11 +140,11 @@ class SingleTaxiEnv(discrete.DiscreteEnv):
                 low=0,
                 high=1,
                 shape=obs_image_shape,
-                dtype='float32')
+                dtype='uint8')
 
             self.fuel_space = gym.spaces.Discrete(MAX_FUEL - 1)
             # self.fuel_space = gym.spaces.Box(
-            #     low=0, high=MAX_FUEL, shape=(self.n_agents,), dtype='float32')
+            #     low=0, high=MAX_FUEL, shape=(self.n_agents,), dtype='uint8')
 
             observation_space = {'image': self.image_obs_space, 'fuel': self.fuel_space}
             self.observation_space = gym.spaces.Dict(observation_space)
@@ -158,12 +158,12 @@ class SingleTaxiEnv(discrete.DiscreteEnv):
             low=0,
             high=1,
             shape=(self.total_row_size, self.total_col_size, 3),
-            dtype='float32')
+            dtype='uint8')
 
         self.adversary_randomz_obs_space = gym.spaces.Box(low=0, high=1.0, shape=(random_z_dim,), dtype=np.float32)
 
         self.adversary_ts_obs_space = gym.spaces.Box(
-            low=0, high=self.adversary_max_steps, shape=(1,), dtype='float32')
+            low=0, high=self.adversary_max_steps, shape=(1,), dtype='uint8')
         self.adversary_observation_space = gym.spaces.Dict(
             {'image': self.adversary_image_obs_space,
              'time_step': self.adversary_ts_obs_space,
@@ -368,7 +368,7 @@ class SingleTaxiEnv(discrete.DiscreteEnv):
 
     def get_map_image(self, adversarial=False):
         h, w = len(self._str_map), len(self._str_map[0])
-        rgb_map = np.zeros((h, w, 3)).astype(np.float32)
+        rgb_map = np.zeros((h, w, 3)).astype(np.uint8)
         if self.s != -1:
             taxi_row, taxi_col, pass_idx, dest_idx, fuel = self.decode(self.s)
         else:
@@ -406,7 +406,7 @@ class SingleTaxiEnv(discrete.DiscreteEnv):
                         num_objs_on_cell += 1
 
                     if num_objs_on_cell > 0:
-                        cell_color = (cell_color / num_objs_on_cell).astype(np.float32)
+                        cell_color = (cell_color / num_objs_on_cell).astype(np.uint8)
 
                 rgb_map[r_index, c_index] = cell_color
         if not self.fully_observed and not adversarial and taxi_row != -1:
@@ -417,7 +417,7 @@ class SingleTaxiEnv(discrete.DiscreteEnv):
         else:
             rgb_map = rgb_map + 50
 
-        return rgb_map / 255
+        return rgb_map
 
     def render(self, mode='human'):
         if mode == "rgb_array":
@@ -618,7 +618,7 @@ class SingleTaxiEnv(discrete.DiscreteEnv):
         taxi_row, taxi_col, pass_idx, dest_idx, fuel = self.decode(self.s)
 
         if not self.fully_observed:
-            agent_image = np.zeros((self.agent_view_size * 2, self.agent_view_size * 2, 3)).astype(np.float32)
+            agent_image = np.zeros((self.agent_view_size * 2, self.agent_view_size * 2, 3)).astype(np.uint8)
             gray = np.array([78] * 3) + 50  # gray - show walls in edges
             agent_image = agent_image + gray
             row, col = self.translate_from_local_to_map(taxi_row, taxi_col)
