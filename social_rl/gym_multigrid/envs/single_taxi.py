@@ -39,7 +39,7 @@ PASSENGER_IN_TAXI = -1
 STEP_REWARD, PICKUP_REWARD, BAD_PICKUP_REWARD, DROPOFF_REWARD, BAD_DROPOFF_REWARD, REFUEL_REWARD, BAD_REFUEL_REWARD, NO_FUEL_REWARD = "step", "good_pickup", "bad_pickup", "good_dropoff", "bad_dropoff", "good_refuel", "bad_refuel", "no_fuel"
 MAX_FUEL = 50
 REWARD_DICT = {STEP_REWARD: -1,
-               PICKUP_REWARD: 0, BAD_PICKUP_REWARD: -10,
+               PICKUP_REWARD: 5, BAD_PICKUP_REWARD: -10,
                DROPOFF_REWARD: 20, BAD_DROPOFF_REWARD: -10,
                REFUEL_REWARD: 10, BAD_REFUEL_REWARD: -10, NO_FUEL_REWARD: -100}
 
@@ -119,6 +119,7 @@ class SingleTaxiEnv(discrete.DiscreteEnv):
         self.adversary_max_steps = self.n_clutter + 2
         self.fully_observed = True
         self.n_agents = 1
+        # self.last_loc = 0
         # INIT MAP PARAMS
         self.s = -1
         dummy_map = self.create_empty_map(self.size)
@@ -159,7 +160,6 @@ class SingleTaxiEnv(discrete.DiscreteEnv):
             high=1,
             shape=(self.total_row_size, self.total_col_size, 3),
             dtype='float32')
-        self.param_vector = []
 
         self.adversary_randomz_obs_space = gym.spaces.Box(low=0, high=1.0, shape=(random_z_dim,), dtype=np.float32)
 
@@ -225,6 +225,7 @@ class SingleTaxiEnv(discrete.DiscreteEnv):
                                     if new_col == col - 1:
                                         fuel -= 1
                                 elif action == PICKUP:  # pickup
+                                    # reward = REWARD_DICT[PICKUP_REWARD]
                                     if pass_idx < self.passenger_in_taxi and taxi_loc == self.passengers_locations[
                                             pass_idx]:
                                         new_pass_idx = self.passenger_in_taxi
@@ -571,6 +572,7 @@ class SingleTaxiEnv(discrete.DiscreteEnv):
         self.adversary_step_count = 0
         self._str_map = self.create_empty_map(self.size)
         self.desc = np.asarray(self._str_map, dtype='c')
+        self.param_vector = []
 
         # Extra metrics
         self.reset_metrics()
@@ -697,6 +699,7 @@ class SingleTaxiEnv(discrete.DiscreteEnv):
         """
         step_order = self.step_order  # ["choose_goal","choose_passanger", "choose_fuel", , "choose_agnet"]  # else choose_walls
         current_turn = step_order[self.adversary_step_count] if self.adversary_step_count < len(step_order) else "place_walls"
+        # loc = self.last_loc + 1
         self.param_vector.append(loc)
         if loc >= self.adversary_action_dim:
             raise ValueError('Position passed to step_adversary is outside the grid.')
