@@ -159,6 +159,7 @@ class SingleTaxiEnv(discrete.DiscreteEnv):
             high=1,
             shape=(self.total_row_size, self.total_col_size, 3),
             dtype='float32')
+        self.param_vector = []
 
         self.adversary_randomz_obs_space = gym.spaces.Box(low=0, high=1.0, shape=(random_z_dim,), dtype=np.float32)
 
@@ -696,6 +697,7 @@ class SingleTaxiEnv(discrete.DiscreteEnv):
         """
         step_order = self.step_order  # ["choose_goal","choose_passanger", "choose_fuel", , "choose_agnet"]  # else choose_walls
         current_turn = step_order[self.adversary_step_count] if self.adversary_step_count < len(step_order) else "place_walls"
+        self.param_vector.append(loc)
         if loc >= self.adversary_action_dim:
             raise ValueError('Position passed to step_adversary is outside the grid.')
 

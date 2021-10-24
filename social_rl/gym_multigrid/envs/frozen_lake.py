@@ -138,6 +138,8 @@ class FrozenLakeEnv(discrete.DiscreteEnv):
         self.adversary_max_steps = self.n_clutter + 2
         self.fully_observed = True
         self.n_agents = 1
+        self.param_vector = []
+
 
         # INIT MAP PARAMS
         self.is_slippery = is_slippery
@@ -399,7 +401,7 @@ class FrozenLakeEnv(discrete.DiscreteEnv):
         current_turn = step_order[self.adversary_step_count] if self.adversary_step_count < len(step_order) else "place_hollow"
         if loc >= self.adversary_action_dim:
             raise ValueError('Position passed to step_adversary is outside the grid.')
-
+        self.param_vector.append(loc) 
         # Add offset of 1 for outside walls
         row, col = self.decode(loc)
 
