@@ -20,7 +20,6 @@ simultaneously registered with Gym as a package.
 """
 
 # Import all environments and register them, so pylint: disable=wildcard-import
-from social_rl.gym_multigrid.envs.taxi import *
 from social_rl.gym_multigrid.envs.single_taxi import *
 from social_rl.gym_multigrid.envs.adversarial import *
 from social_rl.gym_multigrid.envs.cluttered import *
