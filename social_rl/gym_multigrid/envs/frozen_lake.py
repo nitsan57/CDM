@@ -122,7 +122,7 @@ class FrozenLakeEnv(discrete.DiscreteEnv):
         EAST = 2
         NORTH = 3
 
-    def __init__(self, desc=None, map_name=None, is_slippery=True, size=4, agent_view_size=3, max_steps=300, n_clutter=10, random_z_dim=50, n_agents=1):
+    def __init__(self, desc=None, map_name=None, is_slippery=True, size=5, agent_view_size=3, max_steps=300, n_clutter=8, random_z_dim=50, n_agents=1):
         ####PARAMS FOR PAIRED####
         self.agent_view_size = agent_view_size
         self.minigrid_mode = True
@@ -138,7 +138,6 @@ class FrozenLakeEnv(discrete.DiscreteEnv):
         self.adversary_max_steps = self.n_clutter + 2
         self.fully_observed = True
         self.n_agents = 1
-        self.param_vector = []
 
 
         # INIT MAP PARAMS
@@ -320,6 +319,7 @@ class FrozenLakeEnv(discrete.DiscreteEnv):
         self._str_map = create_empty_map(self.size)
         self.desc = np.asarray(self._str_map, dtype='c')
         self.lastaction = None
+        self.param_vector = []
 
         # Extra metrics
         self.reset_metrics()
