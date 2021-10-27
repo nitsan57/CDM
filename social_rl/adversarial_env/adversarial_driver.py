@@ -150,22 +150,20 @@ class AdversarialDriver(object):
             
             agent_idx = np.random.choice(len(self.agent))
             agent = self.agent[agent_idx]
-            policy = agent.collect_policy
 
-            policy_state = policy.get_initial_state(self.env.batch_size)
             num_envs = 50
             orig_env_list = self.custom_env_list
             #   
             trajectories_list = []
 
-            env_idx = self.env_curriculum.create_env_greedy(orig_env_list, policy, policy_state)
+            env_idx = self.env_curriculum.create_env_greedy(orig_env_list, agent)
 
             self.env = orig_env_list[env_idx]
             train_idxs = {}
             # import matplotlib.pyplot as plt
             # plt.imshow(self.env._envs[-1].render())
             # plt.show()
-            custom_printer(f"ENVIRONEMNT NUMBER: {self.total_episodes_collected}")
+            custom_printer(f"search: ENVIRONEMNT NUMBER: {self.total_episodes_collected}")
             ########################################################
             # DEBUG ENV
             # x = self.env._envs[-1].render()
@@ -240,7 +238,7 @@ class AdversarialDriver(object):
 
         # env_curriculum = EnvCurriculum(self.root_dir)
         if self.collect:
-            custom_printer(f"ENVIRONEMNT NUMBER: {self.total_episodes_collected}")
+            custom_printer(f"heuristic: ENVIRONEMNT NUMBER: {self.total_episodes_collected}")
             orig_env_list = self.custom_env_list
             filled_base_env_list = []
             trajectories_list = []
@@ -257,11 +255,9 @@ class AdversarialDriver(object):
                 # plt.show()
             agent = self.agent[agent_idx]
             # custom_printer(f"AGNET_RUNNING ON SAMPLED STATE:{agent.name}")
-            policy = agent.collect_policy
 
-            policy_state = policy.get_initial_state(self.env.batch_size)
             if self.mode == "entropy":
-                idx = self.env_curriculum.choose_best_env_idx_by_entropy(filled_base_env_list, policy, policy_state)
+                idx = self.env_curriculum.choose_best_env_idx_by_entropy(filled_base_env_list, agent)
             elif self.mode == "history":
                 idx = self.env_curriculum.choose_best_env_idx_by_history(filled_base_env_list)
             else:
@@ -331,7 +327,7 @@ class AdversarialDriver(object):
         
         if self.mode == "history":
             self.env.reset_agent()
-            env = np.array(self.env._envs[-1].param_vector)
+            env = tuple((self.env._envs[-1].param_vector))
             agent_reward = tf.reduce_mean(agent_r_avg).numpy()
             self.env_curriculum.History[env] = agent_reward
             self.env_curriculum.save_history()
@@ -359,7 +355,7 @@ class AdversarialDriver(object):
         _, _, env_idx = self.run_agent(
             self.env, self.adversary_env, self.env.reset, self.env.step_adversary)
         train_idxs = {'adversary_env': [env_idx]}
-        custom_printer(f"ENVIRONEMNT NUMBER: {self.total_episodes_collected}")
+        custom_printer(f"original: ENVIRONEMNT NUMBER: {self.total_episodes_collected}, train?: {self.collect}")
         ########################################################
         # DEBUG ENV
         # x = self.env._envs[-1].render()
@@ -679,6 +675,7 @@ class AdversarialDriver(object):
                 x = self.env._envs[-1].render()
                 x = cv2.cvtColor(x, cv2.COLOR_RGB2BGR)
                 x = cv2.resize(x, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
+                x =(x * 255).astype(np.uint8)
                 writer.write(x)
 
             # Replace with terminal timestep to manually end episode (enables

@@ -27,6 +27,9 @@ import numpy as np
 
 import tensorflow.compat.v2 as tf
 
+from tf_agents.networks.q_rnn_network import QRnnNetwork
+from tf_agents.networks.categorical_q_network import CategoricalQNetwork
+from tf_agents.networks.q_network import QNetwork
 from tf_agents.networks import actor_distribution_network
 from tf_agents.networks import actor_distribution_rnn_network
 from tf_agents.networks import value_network
@@ -136,6 +139,7 @@ def construct_multigrid_networks(observation_spec,
     if len(tf.nest.flatten(observation_spec)) == 1:
         preprocessing_combiner = None
 
+
     if use_rnns:
         actor_net = actor_distribution_rnn_network.ActorDistributionRnnNetwork(
             observation_spec,
@@ -151,6 +155,14 @@ def construct_multigrid_networks(observation_spec,
             preprocessing_combiner=preprocessing_combiner,
             input_fc_layer_params=value_fc_layers,
             output_fc_layer_params=None)
+
+        q_network = QRnnNetwork(
+            observation_spec, 
+            action_spec, 
+            preprocessing_layers=preprocessing_layers,
+            preprocessing_combiner=preprocessing_combiner,
+            input_fc_layer_params=actor_fc_layers,
+            lstm_size=lstm_size)
     else:
         actor_net = actor_distribution_network.ActorDistributionNetwork(
             observation_spec,
@@ -166,7 +178,15 @@ def construct_multigrid_networks(observation_spec,
             fc_layer_params=value_fc_layers,
             activation_fn=tf.keras.activations.tanh)
 
-    return actor_net, value_net
+        q_network = QNetwork(
+            observation_spec, 
+            action_spec, 
+            preprocessing_layers=preprocessing_layers,
+            preprocessing_combiner=preprocessing_combiner,
+            fc_layer_params=actor_fc_layers)
+
+
+    return actor_net, value_net , q_network
 
 
 def get_spatial_basis(h, w, d):

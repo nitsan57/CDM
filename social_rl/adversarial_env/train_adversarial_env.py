@@ -120,6 +120,8 @@ flags.DEFINE_string('dir', "temp",
                     'save_debug_results')
 flags.DEFINE_string('mode', "original",
                     'chose training mode')
+flags.DEFINE_string('agent_type', "ppo_clip",
+                    'chose agent')
 
 FLAGS = flags.FLAGS
 
@@ -299,7 +301,7 @@ def train_eval(
                     replace_reward=(not unconstrained_adversary
                                     and agents_learn_with_regret),
                     id_num=i,
-
+                    agent_type = FLAGS.agent_type,
                     # Architecture hparams
                     learning_rate=learning_rate,
                     actor_fc_layers=actor_fc_layers,
@@ -341,6 +343,7 @@ def train_eval(
                     non_negative_regret=non_negative_regret,
                     xy_dim=xy_dim,
                     id_num=i,
+                    agent_type = FLAGS.agent_type,
                     block_budget_weight=block_budget_weight,
 
                     # Architecture hparams
@@ -372,7 +375,7 @@ def train_eval(
         else:
             adversary_env = agents['adversary_env']
 
-        env_curriculum = EnvCurriculum(FLAGS.root_dir, mode)
+        env_curriculum = EnvCurriculum(FLAGS.root_dir, mode, FLAGS.agent_type)
 
         collect_driver = adversarial_driver.AdversarialDriver(
             tf_env,
@@ -656,7 +659,7 @@ def train_eval_search_based(
     root_dir = os.path.expanduser(root_dir)
     train_dir = os.path.join(root_dir, 'train')
     eval_dir = os.path.join(root_dir, 'eval')
-    env_curriculum = EnvCurriculum(FLAGS.root_dir, mode)
+    env_curriculum = EnvCurriculum(FLAGS.root_dir, mode, FLAGS.agent_type)
 
     train_summary_writer = tf.compat.v2.summary.create_file_writer(
         train_dir, flush_millis=summaries_flush_secs * 1000)
@@ -740,7 +743,7 @@ def train_eval_search_based(
                     replace_reward=(not unconstrained_adversary
                                     and agents_learn_with_regret),
                     id_num=i,
-
+                    agent_type = FLAGS.agent_type,
                     # Architecture hparams
                     learning_rate=learning_rate,
                     actor_fc_layers=actor_fc_layers,

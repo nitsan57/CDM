@@ -1,3 +1,4 @@
+from __future__ import print_function
 from operator import le
 import numpy as np
 from scipy.stats import entropy
@@ -8,12 +9,13 @@ import cv2
 import tensorflow as tf
 
 class EnvCurriculum(object):
-    def __init__(self, root_dir, mode) -> None:
+    def __init__(self, root_dir, mode, agent_type) -> None:
 
         self.History = dict()
         self.curr_d_param = 1 # param change rate
         self.params_vector = []
         self.mode = mode
+        self.agent_type = agent_type
         
         if mode == "history":
             f_name = os.path.join(root_dir,"history.pickle")
@@ -33,22 +35,32 @@ class EnvCurriculum(object):
             else:
                 custom_printer("SEARCH FILE DOESNT EXISTS!!!!")
 
-    def eval_env_entropy(self, env, policy, policy_state):
+    def eval_env_entropy(self, env, agent):
         # TODO: CALC ~10% of num states
         # entropy(p, base=4) #p = prob vector
         num_to_sample = 25
         total_agnet_entropy = 0
+
+        policy = agent.collect_policy
+        policy_state = policy.get_initial_state(env.batch_size)
+
         for i in range(num_to_sample):
             # TODO: FIND OUT MULTIPLE ENVS ISSUES
             time_step = env.reset_agent()
             time_step = env.sample_random_state()
-
-            action_step = policy.distribution(time_step, policy_state)
-            num_actions = len(action_step.action.logits_parameter()[0])
             probs = []
-            for i in range(num_actions):
-                probs.append(action_step.action.prob(i).numpy())
-            probs = np.array(probs).reshape(len(probs))
+            if self.agent_type == "dqn":            
+                q_values = agent.tf_agent._q_network(time_step.observation, time_step.step_type)[0]
+                q_probs = tf.nn.softmax(q_values)
+                probs = q_probs
+            else:
+                action_step = policy.distribution(time_step, policy_state)
+                for i in range(num_actions):
+                    probs.append(action_step.action.prob(i).numpy())
+
+            num_actions = policy.policy_step_spec.action.maximum - policy.policy_step_spec.action.minimum + 1
+
+            probs = probs[0]
             agnet_entropy = entropy(probs, base=num_actions)
 
             total_agnet_entropy += agnet_entropy
@@ -57,10 +69,10 @@ class EnvCurriculum(object):
 
         return total_agnet_entropy / num_to_sample
 
-    def choose_best_env_idx_by_entropy(self, env_list, policy, policy_state, return_seq=False):
+    def choose_best_env_idx_by_entropy(self, env_list,agent, return_seq=False):
         scores = []
         for env in env_list:
-            scores.append(self.eval_env_entropy(env, policy, policy_state))
+            scores.append(self.eval_env_entropy(env, agent))
         # get env with the closest score of 0.5 # not too hard not too easy
         scores = np.array(scores)
         idx = np.argsort(scores)[len(scores) // 2]
@@ -73,11 +85,11 @@ class EnvCurriculum(object):
 
 
     def eval_env_history_dist(self, env):
-        env_img = cv2.cvtColor(env._envs[-1].render(), cv2.COLOR_BGR2GRAY) 
-        min_dist = np.sum(np.ones_like(env_img)*np.max(env_img))
+        env_param= env._envs[-1].param_vector
+        min_dist = np.sum(np.ones_like(env_param)*np.max(env_param))
         for seen_env in self.History:
             seen_env = np.array(seen_env)
-            dist = np.sum(np.abs(seen_env - env_img))
+            dist = np.sum(np.abs(seen_env - env_param))
             if dist < min_dist:
                 min_dist = dist
         return min_dist
@@ -119,7 +131,10 @@ class EnvCurriculum(object):
 
 
 
-    def create_env_greedy(self, env_list, policy, policy_state):
+    def create_env_greedy(self, env_list, agent):
+        policy = agent.collect_policy
+        policy_state = policy.get_initial_state(env.batch_size)
+
         last_param_vector = self.params_vector
         adversary_action_dim = env_list[0]._envs[-1].adversary_action_dim
         max_length = env_list[0]._envs[-1].adversary_max_steps
@@ -156,7 +171,7 @@ class EnvCurriculum(object):
         #     plt.imshow(e._envs[-1].render())
         #     plt.show()
 
-        idx, scores = self.choose_best_env_idx_by_entropy(env_list, policy, policy_state, return_seq=True)
+        idx, scores = self.choose_best_env_idx_by_entropy(env_list, agent, return_seq=True)
         curr_step_variance = np.var(scores)
         if (curr_step_variance / max_var_bound) < 0.2 and self.curr_d_param < (adversary_action_dim*max_length // 2):
             #increase parameter change by 1 if variance too small

@@ -22,7 +22,7 @@ from absl import logging
 
 import tensorflow as tf  # pylint: disable=g-explicit-tensorflow-version-import
 
-from tf_agents.agents.ppo import ppo_clip_agent
+from tf_agents.agents.ppo import ppo_clip_agent, ppo_agent
 from tf_agents.networks import q_network
 from tf_agents.agents.dqn import dqn_agent
 from tf_agents.eval import metric_utils
@@ -52,6 +52,7 @@ class AgentTrainPackage(object):
                  non_negative_regret=False,
                  id_num=0,
                  block_budget_weight=0.,
+                 agent_type="ppo",
 
                  # Architecture hparams
                  use_rnn=True,
@@ -71,7 +72,7 @@ class AgentTrainPackage(object):
                  num_parallel_envs=5,
                  replay_buffer_capacity=1001,
                  debug_summaries=True,
-                 summarize_grads_and_vars=True,):
+                 summarize_grads_and_vars=True):
         """Initializes agent, replay buffer, metrics, and checkpointing.
 
         Args:
@@ -141,7 +142,7 @@ class AgentTrainPackage(object):
                 self.observation_spec = env.adversary_observation_spec
 
                 (self.actor_net,
-                 self.value_net) = multigrid_networks.construct_multigrid_networks(
+                 self.value_net, self.q_network) = multigrid_networks.construct_multigrid_networks(
                      self.observation_spec, self.action_spec, use_rnns=use_rnn,
                      actor_fc_layers=actor_fc_layers, value_fc_layers=value_fc_layers,
                      lstm_size=lstm_size, conv_filters=conv_filters,
@@ -149,27 +150,16 @@ class AgentTrainPackage(object):
                      scalar_name='time_step',
                      scalar_dim=self.observation_spec['time_step'].maximum + 1,
                      random_z=True, xy_dim=xy_dim)
-            else:
-                self.time_step_spec = env.time_step_spec()
-                self.action_spec = env.action_spec()
-                self.observation_spec = env.observation_spec()
-
-                (self.actor_net,
-                 self.value_net) = multigrid_networks.construct_multigrid_networks(
-                     self.observation_spec, self.action_spec, use_rnns=use_rnn,
-                     actor_fc_layers=actor_fc_layers, value_fc_layers=value_fc_layers,
-                     lstm_size=lstm_size, conv_filters=conv_filters,
-                     conv_kernel=conv_kernel, scalar_fc=scalar_fc)
-
-            self.tf_agent = ppo_clip_agent.PPOClipAgent(  # dqn_agent(
+                    
+                self.tf_agent =  ppo_clip_agent.PPOClipAgent( 
                 self.time_step_spec,
                 self.action_spec,
-                self.optimizer,
+                # q_network = self.actor_net,
+                optimizer= self.optimizer,
                 actor_net=self.actor_net,
                 value_net=self.value_net,
-                # q_network=q_network,
-                entropy_regularization=entropy_regularization,
-                importance_ratio_clipping=0.2,
+                entropy_regularization=0,
+                # importance_ratio_clipping=0.2,
                 normalize_observations=False,
                 normalize_rewards=False,
                 use_gae=True,
@@ -177,6 +167,59 @@ class AgentTrainPackage(object):
                 debug_summaries=debug_summaries,
                 summarize_grads_and_vars=summarize_grads_and_vars,
                 train_step_counter=global_step)
+
+                self.tf_agent.initialize()
+                self.eval_policy = self.tf_agent.policy
+                self.collect_policy = self.tf_agent.collect_policy
+            else:
+                self.time_step_spec = env.time_step_spec()
+                self.action_spec = env.action_spec()
+                self.observation_spec = env.observation_spec()
+
+                (self.actor_net,
+                 self.value_net, self.q_network) = multigrid_networks.construct_multigrid_networks(
+                     self.observation_spec, self.action_spec, use_rnns=True,
+                     actor_fc_layers=actor_fc_layers, value_fc_layers=value_fc_layers,
+                     lstm_size=lstm_size, conv_filters=conv_filters,
+                     conv_kernel=conv_kernel, scalar_fc=scalar_fc)
+                
+                  
+
+            if agent_type == "ppoclip" or agent_type == "ppo_clip":
+              self.tf_agent =  ppo_clip_agent.PPOClipAgent( 
+                  self.time_step_spec,
+                  self.action_spec,
+                  optimizer= self.optimizer,
+                  actor_net=self.actor_net,
+                  value_net=self.value_net,
+                  entropy_regularization=0,
+                  importance_ratio_clipping=0.2,
+                  normalize_observations=False,
+                  normalize_rewards=False,
+                  use_gae=True,
+                  num_epochs=num_epochs,
+                  debug_summaries=debug_summaries,
+                  summarize_grads_and_vars=summarize_grads_and_vars,
+                  train_step_counter=global_step)
+
+            elif agent_type == "dqn":
+              self.tf_agent =  dqn_agent.DqnAgent( #
+                self.time_step_spec,
+                self.action_spec,
+                q_network = self.q_network,
+                optimizer= self.optimizer,
+                # actor_net=self.actor_net,
+                # value_net=self.value_net,
+                # entropy_regularization=0,
+                # importance_ratio_clipping=0.2,
+                # normalize_observations=False,
+                # normalize_rewards=False,
+                # use_gae=True,
+                # num_epochs=num_epochs,
+                debug_summaries=debug_summaries,
+                summarize_grads_and_vars=summarize_grads_and_vars,
+                train_step_counter=global_step)
+
             self.tf_agent.initialize()
             self.eval_policy = self.tf_agent.policy
             self.collect_policy = self.tf_agent.collect_policy
